@@ -1,0 +1,141 @@
+From: taylanbayirli@gmail.com (Taylan Ulrich B.)
+Subject: Re: On "Why mobile web apps are slow"
+To: Drew Crawford <drew@sealedabstract.com>
+Date: Mon, 09 Sep 2013 21:17:14 +0200 (53 minutes, 28 seconds ago)
+
+Drew Crawford <drew@sealedabstract.com> writes:
+
+> I share your concern for the level of discussion, although perhaps for
+> different reasons. I will only bother responding to one point, as it
+> is the one that you seemed to take the greatest offense to, and your
+> reaction was largely unintelligible to me:
+>
+>     It is what garbage collectors do, by definition, to collect
+>     objects which they can *prove* to be no longer accessible. The
+>     halting problem only has implications on static analysis, which is
+>     the entire reason garbage-collection is a run-time feature, unlike
+>     for example ARC which works through static analysis only and thus
+>     cannot break cyclic references that appear at run-time. So it
+>     looks like you're unaware of the fundamental workings of
+>     garbage-collection, yet write a whole article on it and pretend to
+>     be smart. I was hoping that even the most blatant mistakes in your
+>     article are due to the unintentional cherry-picking and blindness
+>     induced by your bias regarding this topic, but comes out it's
+>     nothing else than ignorance.
+>
+> A proof of my position is given in Morrisett, Felleisen, and Harper's
+> "Abstract Models of Memory Management" as Proposition 3.4. Although I
+> am quite certain the proof is much older; it is the sort of thing that
+> anyone with a solid grasp of computation theory would be able to see
+> in a few minutes.
+>
+> We are faced with some possibilities here. Either it is the case that
+> Morrisett, Felleisen, and Harper are incorrect, which I think can be
+> rejected out of hand. Then there is I think the most generous outcome
+> for you in which you misunderstand my statement to be something other
+> than Proposition 3.4, and so perhaps "my" position (which is of course
+> your misunderstanding of my position rather than my actual position)
+> might indeed be a very ignorant position, but that is hardly my fault.
+> Finally there is the possibility that you have correctly understood my
+> claim and are just incorrect on the logic.
+
+(I suppose you mean proposition 2.4, presuming that this is the paper
+you have in mind: http://www.cs.cmu.edu/~rwh/papers/gc/fpca95.pdf )
+
+You skipped the possibility that you're misinterpreting the paper,
+and/or ECMA 6, and indeed this is obviously the case: the given proof
+shows that it's undecidable in the general case whether any given object
+*will* be used in the continuation of a process, however as explained in
+the section immediately following, "Reachability-Based Garbage
+Collection", an approximation can be made by finding those objects that
+*can* be used in the continuation of a process, by being reachable at
+all.  Objects that are not even reachable anymore are provably unusable
+in the continuation of the process; they *can* not be reached, and form
+a subset of those that *will* not be reached.
+
+The notion of reachability is actually explicit in the ECMA language (as
+you quote it), hinting that you haven't particularly paid attention to
+the paper and/or ECMA 6:
+
+"All objects which are not transitively strongly reachable from roots
+SHOULD eventually be collected, [...]"
+
+It mentions no requirement of collecting objects that *will* not be
+used, and additionally, unlike the lax and abstract language of the
+Scheme standards, which simply requires the collector to be able to
+prove the garbage-status of an object (whether through reachability or
+otherwise), ECMA actually cares to go into detail and forms the notions
+of roots and transitive, strong reachability.
+
+To add to the irony, the original paper we were discussing, the one
+linked in your article, also introduces the above mentioned distinction
+between "will be used" and "is reachable", under the terms "live" and
+"reachable".  One of the explicit memory managers it uses, the
+"Liveness-Based Oracle", inserts calls to free() after the last actual
+use of each object (determined by profiling a previous run of the same
+process), whereas the other, "Reachability-Based Oracle", inserts the
+calls to free() after the last point in which the object is reachable
+(which any tracing garbage collector could decide).  This tells me that
+you haven't particularly paid attention to that paper either.
+
+The paper also finds, by the way, that there is no significant
+difference between the performance of said two pseudo-explicit memory
+managers ("oracles"), proving (as a side effect) that the "liveliness
+vs. reachability" issue is not a problem in practice for tracing garbage
+collectors.  (Indeed it is good programming practice to scope variables
+in such a way that they are only visible in regions of the program where
+they are also used; this is what incidentally makes reachability-based
+collection work well like it does.)
+
+(By the way thanks for mentioning "Abstract Models of Memory
+Management", it's quite awesome.)
+
+> Whichever case we are in, this is not the time for personal attacks.
+> Well, it is never time for personal attacks, so it is bad for that
+> reason, no matter what sort of silly argument I have presented. But it
+> is especially not time for personal attacks when the position has both
+> a formal proof behind it and the support of respected scholars. It
+> would be the time to mount a very serious argument on the merits, that
+> would require a great deal of best effort, and even then given the
+> level of opposing support is realistically likely to fail.
+>
+> But instead you definitely doubled down on your bet that I am an
+> ignorant person. Which I probably am, so it isn't a bad bet; but the
+> position in question is certainly not ignorant (cf. it has both a
+> proof and academic support), so that fact is not particularly relevant
+> to the question. At any rate, we seem to have a pretty fundamental
+> disconnect about how to have a proper argument. Certainly further
+> discussion on the topic of garbage collectors is not going to shed any
+> light on that problem.
+
+As a matter of fact, I've written my e-mail yesterday late into the
+evening/night, at a somewhat irritable state of mind, so I'd like to
+apologize if anything I said was unjustifiably insulting.  However, as
+explained in my previous e-mail and above in this one, you do seem to be
+very prone to misinterpreting academic papers among else, and yet feel
+high confidence in your misinterpretations of them, ending up writing
+huge, seemingly comprehensive articles, which you believe are
+"fact-based" and highly accurate, while filled with fundamental flaws
+such as (unintentional) cherry-picking and misinterpretation and
+misrepresentation of academic and other publications.  What makes it
+worst of all is that to other ignorant eyes (and I'm not using
+"ignorant" as an insult but rather a sad fact regarding the masses), the
+pompous style of your article makes it seem impressive and believable,
+also making it too overwhelming to counter; look at how much time I'm
+investing in a single section of it (garbage collection), and even these
+efforts will perhaps be in vain because I don't have a highly-public
+place to publish these exchanges between us (which I'm motivated to do;
+I hope you don't mind).
+
+In summary, I hope that my efforts of showing you the extent of the
+misinformation you not only believe in personally, but also spread to
+the masses, will in some way not be in vain; it frustrates me immensely
+that you're potentially causing massive damage to the level of education
+of the masses, hence my unfortunately aggressive tone.  I wish you would
+accept the harmful nature of parts of your attitude and behavior, and
+correct it, disregarding my antagonizing attitude which often I fail to
+restrain.  You are, by the way, in no way a unique or rare case in
+having this combination of ignorance and over-confidence; it seems to be
+extremely common to me, and one of the main issues soiling intelligence
+on a global scale.  I like to call it the unholy combination of
+ignorance and arrogance, and it's one of my personal demons. :)

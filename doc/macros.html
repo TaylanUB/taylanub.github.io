@@ -1,0 +1,67 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <title>What are macros?</title>
+  <style type="text/css">code{white-space: pre;}</style>
+</head>
+<body>
+<div id="header">
+<h1 class="title">What are macros?</h1>
+</div>
+<p>Some languages have a special syntax like the following:</p>
+<pre><code>try {
+  blah
+} catch (FooException e) {
+  blub
+} finally {
+  blip
+}</code></pre>
+<p>which executes <code>blah</code>, handles exceptions of type <code>FooException</code> with <code>blub</code>, and always calls <code>blip</code> to clean-up stuff at the end (no matter if an exception was raised or not), like closing a port that was opened in <code>blah</code>. (If we had called <code>close()</code> on that port at the end of <code>blah</code>, it might not be executed if an exception interrupts the flow of code.)</p>
+<p>Now consider that your language does <em>not</em> have that <code>finally{}</code> syntax feature, and you're forced to do the following each time:</p>
+<pre><code>try {
+  blah
+} catch (AnyException e) {
+  if ( isFooException(e) ) {
+    blub
+  }
+  blip
+  if ( ! isFooException(e) ) {
+    throw(e)
+  }
+}</code></pre>
+<p>This is incredibly annoying. Normally one can write functions to encapsulate common patterns of code, but can you write a function to encapsulate the above pattern? Difficult, eh?</p>
+<p>(If your language supports first-class functions, you could actually write a <code>tryCatchFinally</code> function which takes three functions as its arguments, so this is not the best example (and should remind us that <em>many</em> situations where we think &quot;yay I'll use a macro!&quot; might be better served with a higher-order function, i.e. a function that takes other functions as arguments), but let's ignore that for a moment; there are often cases where even a higher-order function cannot encapsulate a common pattern of code.)</p>
+<p>In a language without macros, you're forced to write repetitive code in many cases if the language doesn't have firsthand <em>syntactic</em> support to encapsulate a common coding pattern. But when you have macros, you can encapsulate those patterns. Macros don't take values as arguments, instead they take unexecuted <em>code snippets</em> (variable names, expressions, statements, etc.) as their arguments, and can inject code around those snippets to build common code patterns.</p>
+<p>Macro definitions often use pattern-matching on the syntax of the language; the following pseudocode uses such a system, where the formal parameters of the <code>tryFin</code> macro definition are not necessarily identifiers (like the variable names in function parameters), and instead may be code templates:</p>
+<pre><code>defineMacro tryFin(tryBody,
+                   &lt;optional&gt; &#39;catch&#39; (ExcType excVar) { catchBody },
+                   &#39;finally&#39; { finBody }) {
+  try {
+    tryBody
+  } catch (AnyException e) {
+    if ( isType(ExcType, e) ) {
+      excVar = e
+      catchBody
+    }
+    finBody
+    if ( ! isType(ExcType, e) ) {
+      throw(e)
+    }
+  }
+}</code></pre>
+<p>(Assume that our macro system is so intelligent that it automatically deletes out the two if statements when the optional code-snippet argument has not been provided, because those if statements refer to identifiers that only appear in the optional parameter.)</p>
+<p>(In this pseudocode I used <code>'singleQuoted'</code> identifiers to express those which are expected to appear verbatim as <em>keywords</em> in the argument snippets while calling the macro, instead of serving as template variables that get bound to (some part of) an argument snippet.)</p>
+<p>Now you can write:</p>
+<pre><code>tryFin({
+  blah
+}, catch (FooException e) {
+  blub
+}, finally {
+  blip
+})</code></pre>
+<p>Ain't that neat?</p>
+</body>
+</html>

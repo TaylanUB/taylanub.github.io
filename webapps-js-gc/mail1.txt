@@ -1,0 +1,159 @@
+From: taylanbayirli@gmail.com (Taylan Ulrich B.)
+Subject: On "Why mobile web apps are slow"
+To: drew@sealedabstract.com
+Date: Sat, 07 Sep 2013 00:33:02 +0200 (2 days, 24 minutes, 26 seconds ago)
+
+Good day,
+
+There is one thing about your article that I can't seem to
+understand, and a couple points of critique.  Starting off.
+
+Under the section "GC on mobile is not the same animal as GC on the
+desktop", you display the chart
+
+http://sealedabstract.com/wp-content/uploads/2013/05/Screen-Shot-2013-05-14-at-10.15.29-PM.png
+
+which seems to indicate that the GenMS garbage collector becomes
+equivalent in speed to explicit memory management when given 3x the
+memory, very slightly surpassing it at 4x.  On a later quote from the
+paper, we read
+
+"In particular, when garbage collection has five times as much memory
+as required, its runtime performance matches or slightly exceeds that
+of explicit memory management."
+
+and
+
+"With three times as much memory, it runs 17% slower on average, and
+with twice as much memory, it runs 70% slower."
+
+(The differences in those quotations from the chart are probably
+because the chart represents the results of just one of many
+benchmarks, whereas the quotations talk about the geometric mean of
+the results if I'm not mistaken.  There is a separate chart for that
+in the paper.)
+
+So it further verifies that at 3x memory, there is not a huge
+difference (17% could be insignificant, or unacceptable, depending on
+the situation, I imagine), and in the absolute worst case, if
+*identical* performance to explicit management is *required*, we need
+5x memory.
+
+In contrast to that, you say
+
+"What this chart says is “As long as you have about 6 times as much
+memory as you really need, you’re fine.  But woe betide you if you
+have less than 4x the required memory.”"
+
+To me, this seems like a non-sequitur.  I don't see how you reach the
+conclusion that 6x memory is needed in the general case, and 4x at
+worst, when the chart and quotations say that at 3x memory one has
+only 17% worse performance, and equivalent or even better at 5x.
+
+Please tell me what I'm missing.  (Further down I will challenge even
+those results of the paper, by the way.)
+
+~~~
+
+Now a couple points of critique.
+
+The article talks about web apps being slow, then builds its whole
+premise on the performance problems of JavaScript.  A web application
+can make significant use of CSS for hardware-accelerated animations,
+use the canvas and web sockets to deliver results of server-side
+computation, etc., so performance problems in JavaScript itself are
+not enough to make a claim on web applications in general.  Indeed,
+you contradict yourself in the article, mentioning that asm.js could
+be used to get higher-performance computation on browsers, avoiding
+normal JS; the only problem, if at all, is JavaScript in itself.  By
+the way, if you visit http://forecast.io/ you can see a perfect
+example of a web application that to me seemed indistinguishable from
+a native application when I had a coworker show it to me on their
+iPhone 5.  It does have very slight animation lag on my iPhone 4S, but
+hardware is not going to get worse; the iPhone 5 can do it.  On this
+concrete evidence alone, I'm afraid I consider the base point of your
+article (that "web apps" are inherently slow) disproven, although more
+specific points you make are open to discussion.
+
+More points on garbage collection.  The paper you link seems to have a
+couple flaws, although I can't be sure.  For the explicit memory
+management, it uses "the best overall allocator of which [they] are
+aware", from Doug Lea.  For the garbage collectors, I'm unsure: in the
+initial listing at the end of page 5, the paper references a 1960
+document from John McCarthy (may he rest in peace) for "MarkSweep", a
+1969 document for "SemiSpace", and a 2002 document for GenCopy.  For
+the "Appel-style" generational collectors ("Gen*") it also references
+a 1989 document.  For the definition listing on page 6, it references
+Blackburn, 2004.  I wonder, whichever implementations were used,
+whether these are at all comparable to a modern production-grade GC as
+for example that of Sun's JVM.
+
+The paper you link compares GC to explicit memory management
+(alloc/free), which reference counting is not identical to in
+performance; to the contrary, "common knowledge" in some circles has
+it that reference counting tends to perform worse than tracing garbage
+collection, a quick Google search on the topic should reveal that
+general idea, although benchmarks of Apple's ARC specifically would be
+another topic.  I'm sure Apple has valid reasons to prefer ARC over
+GC, tightly coupled to details about the rest of their platforms, but
+that's not necessarily relevant to JavaScript or other languages that
+use garbage collection.  I wouldn't be surprised to see a GC-ed
+language that can outperform Objective-C in memory management
+performance.  (Perhaps a well-optimizing Scheme implementation.
+Scheme is perhaps one of the most optimize-able dynamic and GC-ed
+languages.)
+
+In the "Related work" section of the paper, page 11, we see many
+mentions of other research that finds much less bad results for
+garbage collection.  The following is noteworthy: "[Zorn] finds that
+the Boehm-Demers-Weiser collector is occasionally faster than explicit
+memory allocation, but that the memory consumed by the BDW collector
+is almost always higher than that consumed by explicit memory
+managers, ranging from 21% less to 228% more."  That is about 3.3x
+memory at worst, and performance occasionally better, and the BDW is a
+conservative collector that deals with the idiosyncrasies of C,
+instead of being the GC of a language designed for GC in first place
+like Java.  Something seems wrong.
+
+And a point on the language of ECMA 6 as quoted by you: perhaps you're
+unfamiliar with standards bodies but it's rather common for a standard
+to have definitions that seem "tautological" and needless.  You mock
+the standard for defining the garbage collector to be what we already
+know it obviously to be; the thing to note is that, from the
+perspective of the standard, there has so far not been a thing such as
+a garbage collector, it has never been defined, so the part you quote
+is, simply, this definition that was so far lacking, hence seeming
+tautological.  Indeed somewhat useless, but nothing unusual for a dry
+language specification.  Consider the language of the Scheme
+standards, regarded very highly in academia:
+
+"All objects created in the course of a Scheme computation, including
+procedures and continuations, have unlimited extent.  No Scheme object
+is ever destroyed.  The reason that implementations of Scheme do not
+(usually!) run out of storage is that they are permitted to reclaim
+the storage occupied by an object if they can prove that the object
+cannot possibly matter to any future computation."
+
+They have been using this exact wording since about 15 years, from the
+3rd to the upcoming 7th revision. :)
+
+~~~
+
+I think it would be most appropriate to follow up on your blog with
+corrections on many of the above mentioned points.  You can find more
+critiques of your article in your blog's comments and on other blogs
+if you Google for the title of your article.
+
+Regards
+Taylan
+
+
+P.S.: After writing this e-mail I decided to post a copy of it on your
+article's comments, just to give the general population a better
+chance to realize some of the flaws the article has.  It would still
+be most appreciated to follow up with corrections of yourself, I don't
+intend to debate!  (Maybe if I had a blog.)
+
+P.P.S.: If you please, fix the formatting of my comment, the "~~~"
+lines apparently had some meaning in the blog engine and changed the
+font of subsequent text to mono-space. :)

@@ -1,0 +1,56 @@
+== Guile Boundness and Definedness ==                -*- mode: org -*-
+
+Concepts
+========
+
+Unbound (identifier/symbol): No variable bound to symbol.
+
+Undefined (variable): Variable holds the special low-level "unbound"
+value, which makes it behave as if actually unbound.
+
+Unspecified (value): The special "unspecified" value visible from
+Scheme, used in many but not all places where the Scheme reports
+mention an unspecified value.
+
+(Mathematically undefined: The Scheme reports use the word
+"undefined" only to refer to the mathematical concept of
+undefinedness.  In all cases where this happens, it's fairly obvious,
+and not prone to confusion with an identifier being unbound, a
+variable being undefined, or a value being unspecified.  When having
+to mention identifiers bound to undefined variables, like in the
+definition of `letrec`, the reports tend to use different wording and
+not use a specific term, like saying that an identifier is bound to "a
+fresh location" holding "an unspecified value" and that trying to
+assign or reference its value is an error.)
+
+
+C level
+=======
+
+SCM_UNDEFINED: The special low-level unbound value.  Also used to
+specify unprovided optional arguments to scm_* functions.
+
+SCM_UNBNDP (SCM X): Test if X holds SCM_UNDEFINED.
+
+SCM_UNSPECIFIED: The unspecified value.
+
+SCM_UNBOUND: A special value distinct from all others mentioned here,
+visible from Scheme, used in vm.c and goops.c for some purposes.
+
+
+Scheme level
+============
+
+Scheme code generally cannot distinguish between unbound identifiers
+and undefined variables; using an unbound identifier and using an
+identifier bound to an undefined variable both raise the same error.
+
+The exception to this is code that uses the reflective module API.
+
+The "Unbound variable" error: This means that an identifier is either
+unbound, or the variable it's bound to holds the special low-level
+undefined value.  (One might notice in the error output that the
+procedure from which the error is raised differs in the two cases.)
+
+defined?: Tests if a symbol is bound and its variable defined in the
+top-level environment.

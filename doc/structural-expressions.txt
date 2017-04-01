@@ -1,0 +1,71 @@
+From: "Taylan Ulrich B." <taylanbayirli@gmail.com>
+Subject: Structural Expressions
+To: 9fans@9fans.net
+Date: Wed, 6 Apr 2011 21:14:42 +0200
+
+I've read Rob Pike's paper on structural expressions.  Maybe I'm missing
+something, but it seems that, the command language of sam (especially
+the text-selection mechanism of it; x, y, g chains) could be merged with
+expressions in the style of awk actions, and more importantly, added a
+functionality we might call "subroutines", to create a more elegant and
+expressive text processing language.
+
+The idea initially sparked up after looking at the refer database
+example given in Pike's paper:
+
+  ... Consider a refer database, which has multi-line records separated
+  by blank lines.  Each line of a record begins with a percent sign and
+  a character indicating the type of information on the line: A for
+  author, T for title, etc.  Staying with sam notation, the command to
+  search a refer database for all papers written by Bimmler is:
+
+      x/(.+\n)+/ g/%A.*Bimmler/p
+
+  -- break the file into non-empty sequences of non-empty lines and
+  print any set of lines containing 'Bimmler' on a line after '%A'.
+  (To be compatible with other tools, a '.' does not match a newline.)
+  ...
+
+What if the structure of the input stream was complex enough to disable
+us from relying on a regex feature like the non-newline-matching dot?
+It already goes against the whole idea of structural expressions, which
+is to rely on the structure of the stream.
+We have a structure made of newline-terminated records holding
+information.  We want to search for a specific piece of information that
+could be in any of the records, and when said information is found, act
+on the original, whole structure.  This means that we have to go back to
+a previous selection, in some way.  This is probably most cleanly
+implemented with the idea of subroutines.
+The following expression, written in a hypothetical sam alike syntax
+allowing subroutines inside brackets, does the same thing as the sam
+expression given in Pike's example:
+
+  x/(.+\n)+/ [ x/.*\n/ g/%A.* Bimmler/ R ] p
+
+(R to return true.)
+
+
+The way in which awk alike syntax would be added to our hypothetical
+language is open for discussion.  One possibility would be to allow code
+blocks that are a subset of awk action blocks, perhaps limited to
+variable usage and some comparison operators; guess what this code is
+supposed to do:
+
+  x/(.+\n)+/ [ x/.*\n/ x/^Age: (.*)/ { $1 > 17 } ] x/Name: (.*)\n/ y/Name: / p
+
+An alternative would be to make the language awk-based instead of
+sam-based, but using sam's text selection commands to populate $0, $1,
+etc. (like mentioned by Pike).
+Two versions of which one is stream and scripting oriented and leans
+more towards awk, and the other buffer and interactive-usage oriented
+which leans more towards sam, are perhaps the most likely possibilities.
+
+
+
+---
+
+Blergh, now i'm sick of formalism. Disclaimer: I'm 17.
+Is this subroutines idea perhaps already implemented in some way?
+
+
+Taylan Ulrich Bayırlı

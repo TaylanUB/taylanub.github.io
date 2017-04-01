@@ -1,0 +1,316 @@
+;;; -*- mode: scheme -*-
+
+;;; Terminology: operator/operand are un-evaluated sexpr elements (first and
+;;; rest, respectively), procedure/argument are their evaluated values.
+
+(define-module (taylan values)
+  #:export
+  (compile run default-env))
+
+(use-modules (srfi srfi-1)
+             (srfi srfi-2)
+             (srfi srfi-9)
+             (srfi srfi-11))
+
+;;; Helpers
+
+(define (map-values proc alist)
+  (map (lambda (entry)
+         (cons (car entry) (proc (cdr entry))))
+       alist))
+
+(define (disjoin . preds)
+  (lambda args
+    (any (lambda (pred) (apply pred args)) preds)))
+
+(define (assert bool description)
+  (unless bool
+    (error description)))
+
+;;; S-expr elements
+
+(define-record-type <optional-marker>
+  (optional-marker) optional-marker?)
+
+(define-record-type <rest-marker>
+  (rest-marker) rest-marker?)
+
+(define-record-type <kw-marker>
+  (kw-marker) kw-marker?)
+
+(define-record-type <kw-arg-marker>
+  (kw-arg-marker name) kw-arg-marker?
+  (name kw-arg-marker-name))
+
+;;; Values
+
+(define-record-type <values>
+  (make-values mandatory optional keyword keyword-opt min max) values?
+  (mandatory mandatory-positional-values)
+  (optional optional-positional-values)
+  (keyword mandatory-keyword-values)
+  (keyword-opt optional-keyword-values)
+  (min values-mandatory-count)
+  (max values-provided-count))
+
+(define (get-single-value values)
+  (assert (and (= 1 (values-mandatory-count values))
+               (null? (mandatory-keyword-values values)))
+          "Unexpected number of values.")
+  (car (mandatory-positional-values values)))
+
+;;; Compilation & running
+
+(define-record-type <special-form>
+  (special-form compile-proc) special-form?
+  (compile-proc special-form-compile-proc))
+
+(define-record-type <code>
+  (code executor) code?
+  (executor code-executor))
+
+(define (compile form env)
+  (cond
+   ((list? form)
+    (let ((operator (assq-ref env (car form))))
+      (if (special-form? operator)
+          ((special-form-compile-proc operator) form env)
+          (compile-procedure-call form env))))
+   ((symbol? form)
+    (code
+     (lambda ()
+       (make-values (list (assq-ref env form)) '() '() '() 1 1))))
+   (((disjoin optional-marker? rest-marker? kw-marker? kw-arg-marker?) form)
+    (error "Invalid syntax:" form))
+   (else
+    (code
+     (lambda ()
+       (make-values (list form) '() '() '() 1 1))))))
+
+(define (run code)
+  ((code-executor code)))
+
+;;; Param specs
+
+(define-record-type <params>
+  (%make-params mandatory optional rest keyword keyword-rest min max) params?
+  (mandatory mandatory-params)
+  (optional optional-params)
+  (rest rest-param)
+  (keyword keyword-params)
+  (keyword-rest keyword-rest-param)
+  (min params-expected-count)
+  (max params-accepted-count))
+
+(define (make-params mandatory optional rest keyword keyword-rest)
+  (%make-params mandatory optional rest keyword keyword-rest
+                (length mandatory)
+                (if rest
+                    +inf.0
+                    (+ (length mandatory) (length optional)))))
+
+(define (parse-params form)
+  (cond
+   ((symbol? form) form)
+   (else
+    (let*-values
+        (((mandatory-params rest)
+          (span (negate (disjoin optional-marker? rest-marker? kw-marker?))
+                form))
+         ((optional-params rest)
+          (if (or (null? rest) (not (optional-marker? (car rest))))
+              (values '() rest)
+              (span (negate (disjoin rest-marker? kw-marker?)) (cdr rest))))
+         ((rest-param rest)
+          (if (or (null? rest) (not (rest-marker? (car rest))))
+              (values #f rest)
+              (values (cadr rest) (cddr rest))))
+         ((keyword-params rest)
+          (if (or (null? rest) (not (kw-marker? (car rest))))
+              (values '() rest)
+              (span (negate rest-marker?) (cdr rest))))
+         ((keyword-rest-param)
+          (begin
+            (assert (<= (length rest) 2) "Forms left after keyword rest param.")
+            (if (null? rest)
+                #f
+                (cadr rest)))))
+      (make-params mandatory-params optional-params rest-param
+                   keyword-params keyword-rest-param)))))
+
+(define (expand-env env params)
+  (define (make-entry key)
+    (cons key #f))
+  (cond
+   ((symbol? params)
+    (cons (make-entry params) env))
+   (else
+    (let ((mandatory-entries (map make-entry (mandatory-params params)))
+          (optional-entries (map make-entry (optional-params params)))
+          (rest-entry (and=> (rest-param params) make-entry))
+          (keyword-entries (map make-entry (keyword-params params)))
+          (keyword-rest-entry (and=> (keyword-rest-param params) make-entry)))
+      (append env mandatory-entries optional-entries keyword-entries
+              (if rest-entry (list rest-entry) '())
+              (if keyword-rest-entry (list keyword-rest-entry) '()))))))
+
+;;; Lambda compilation
+
+(define-record-type <proc>
+  (make-proc env params code) proc?
+  (env proc-env)
+  (params proc-params)
+  (code proc-code))
+
+(define (compile-lambda lambda-form env)
+  (let* ((params (parse-params (cadr lambda-form)))
+         (env (expand-env env params))
+         (compile* (lambda (form) (compile form env)))
+         (body (let ((codes (map compile* (cddr lambda-form))))
+                 (code (lambda ()
+                         (let lp ((codes codes))
+                           (if (null? (cdr codes))
+                               (run (car codes))
+                               (let-values ((values (run (car codes))))
+                                 (assert (null? values)
+                                         "Unhandled return value.")
+                                 (lp (cdr codes)))))))))
+         (proc (make-proc env params body)))
+    (code
+     (lambda ()
+       (make-values (list proc) '() '() '() 1 1)))))
+
+;;; Values compilation
+
+(define (compile-values values-form env)
+  (define (compile* form)
+    (compile form env))
+  (define (compile-keyword-operands keyword-operands)
+    (let lp ((alist '())
+             (rest keyword-operands))
+      (if (null? rest)
+          alist
+          (let ((kw-arg-marker (car rest))
+                (oper (cadr rest))
+                (rest (cddr rest)))
+            (lp (cons (cons (kw-arg-marker-name kw-arg-marker)
+                            (compile* oper))
+                      alist)
+                rest)))))
+  (let*-values
+      (((rest)
+        (cdr values-form))
+       ((mandatory-opers rest)
+        (span (negate (disjoin optional-marker? kw-arg-marker?)) rest))
+       ((optional-opers rest)
+        (if (or (null? rest) (kw-arg-marker? (car rest)))
+            (values '() rest)
+            (span (negate kw-arg-marker?) (cdr rest))))
+       ((keyword-opers rest)
+        (span (negate optional-marker?) rest))
+       ((keyword-opt-opers)
+        (if (null? rest)
+            '()
+            (cdr rest))))
+    (let ((mandatory-arg-codes (map compile* mandatory-opers))
+          (optional-arg-codes (map compile* optional-opers))
+          (keyword-arg-codes (compile-keyword-operands keyword-opers))
+          (keyword-opt-arg-codes (compile-keyword-operands keyword-opt-opers))
+          (min (length mandatory-opers))
+          (max (+ (length mandatory-opers) (length optional-opers))))
+      (code
+       (lambda ()
+         (define (run* code)
+           (get-single-value (run code)))
+         (let ((mandatory-args (map run* mandatory-arg-codes))
+               (optional-args (map run* optional-arg-codes))
+               (keyword-args (map-values run* keyword-arg-codes))
+               (keyword-opt-args (map-values run* keyword-opt-arg-codes)))
+           (make-values mandatory-args optional-args
+                        keyword-args keyword-opt-args
+                        min max)))))))
+
+;;; Procedure call compilation
+
+(define (fill-env! env params values)
+  (cond
+   ((symbol? params)
+    (assoc-set! env params values))
+   (else
+    (assert (and (<= (params-expected-count params)
+                     (values-provided-count values))
+                 (>= (params-accepted-count params)
+                     (values-mandatory-count values)))
+            "Wrong number of arguments.")
+    (let lp ((positional-params (append (mandatory-params params)
+                                        (optional-params params)))
+             (positional-values (append (mandatory-positional-values values)
+                                        (optional-positional-values values))))
+      (if (or (null? positional-params) (null? positional-values))
+          (and-let* ((rest-param (rest-param params)))
+            (assoc-set! env rest-param positional-values))
+          (begin
+            (assoc-set! env (car positional-params) (car positional-values))
+            (lp (cdr positional-params) (cdr positional-values)))))
+    (let lp ((kw-params (keyword-params params))
+             (mandatory (mandatory-keyword-values values))
+             (optional (optional-keyword-values values)))
+      (if (null? kw-params)
+          (let ((rest (keyword-rest-param params)))
+            (if rest
+                (assoc-set! env rest (append mandatory optional))
+                (assert (null? mandatory) "Unused keyword arguments.")))
+          (let ((param (car kw-params)))
+            (cond
+             ((assoc-ref mandatory param)
+              => (lambda (value)
+                   (assoc-set! env param value)
+                   (lp (cdr kw-params) (cdr mandatory) optional)))
+             ((assoc-ref optional param)
+              => (lambda (value)
+                   (assoc-set! env param value)
+                   (lp (cdr kw-params) mandatory (cdr optional))))
+             (else
+              (lp (cdr kw-params) mandatory optional)))))))))
+
+(define (apply-values proc values)
+  (let ((env (proc-env proc))
+        (params (proc-params proc))
+        (code (proc-code proc)))
+    (fill-env! env params values)
+    (run code)))
+
+(define (compile-procedure-call call-form env)
+  (let ((proc-code (compile (car call-form) env))
+        (values-code (compile-values call-form env)))
+    (code
+     (lambda ()
+       (let ((proc (get-single-value (run proc-code)))
+             (values (run values-code)))
+         (apply-values proc values))))))
+
+;;; Default env
+
+(define (builtin params proc)
+  (let* ((params (parse-params params))
+         (env (expand-env '() params))
+         (getter (lambda (name)
+                   (or (assoc-ref env name)
+                       (error "Unbound variable in builtin." name))))
+         (code (code
+                (lambda ()
+                  (proc getter)))))
+    (make-proc env params code)))
+
+(define default-env
+  `((lambda . ,(special-form compile-lambda))
+    (values . ,(special-form compile-values))
+    (apply . ,(builtin '(proc values)
+                       (lambda (getter)
+                         (apply-values (getter 'proc) (getter 'values)))))))
+
+;;; TODO: Transform uses of value objects into code that writes or reads certain
+;;; registers or slots on a stack etc.
+;;;
+;;; Support for default values on keyword parameters is left as an exercise to
+;;; the reader.

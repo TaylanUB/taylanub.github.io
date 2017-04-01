@@ -1,0 +1,120 @@
+== Guile Top Level and Module Optimizability ==      -*- mode: org -*-
+-- `define-values' addendum --
+
+Using `define-values' like
+
+(define-values
+  (exported-binding ...)
+  (letrec* ((private-binding private-binding-value) ...)
+    (values
+      exported-binding-value ...)))
+
+yields a set of top-level bindings whose values may reference a set of
+quasi-top-level private bindings.
+
+[ LATE REALIZATIONS: (1) Syntax definitions don't work well with this
+strategy, (2) `set!' calls on the `letrec*' bound variables has no
+effect on the `define-values' bound variables.  Hence the rest of this
+document is of questionable value; it's probably a better idea to
+support "truly-private top-levels" directly in the module system. ]
+
+[ Even later realizations: point #2 above doesn't matter because you
+really want your exports to be immutable.  Offer a getter procedure or
+a parameter object if you want a "mutable" export.  Point #1 also
+isn't very important because you can just define your syntax before
+the `define-values' usage.  It doesn't matter if syntax isn't "truly
+private" because it's compile-time only and won't affect run-time
+performance when it has to be looked up inefficiently at every use. ]
+
+Using this to define all initial exported bindings of a module, we can
+reach a kind of module which, in contrast to the claim made in
+Appendix C of `guile-optimize-2.txt', contains truly private
+(quasi-)top-levels without the module being immutable.  This works
+because these bindings are not *really* top-levels: they are merely in
+the shared lexical scope of the initial bindings of the module,
+meaning that any procedures added to the module later on (whether as
+new bindings, or replacing existing ones) can not access said private
+quasi-top-levels.
+
+The mentioned limitation also means that it's quite a useless practice
+to mutate the module: any newly added procedures (even if replacing an
+existing binding) can only access bindings that were exported from the
+module, so the procedures could as well have been part of any other
+module.  Because of this, it could as well be said that the module
+does have an immutable (sans the possibility of *removing* bindings)
+"core" after all.
+
+This is quite a confusing semantics with no obvious benefit compared
+to simply fully immutable modules.  However, it's possible to
+implement purely with `define-values' and no additional machinery.
+
+Arguably, most desirable would be to implement immutable modules and
+truly private top-levels in terms of `define-values' but also add some
+machinery to make the module fully immutable for the sake of
+simplicity.
+
+Trying to think of countering arguments to that, I can imagine
+following use-cases of the ability to mutate the bindings of such a
+module without new procedures being able to access the private
+bindings of the module:
+
+- Simply removing a binding from the module because it's envisioned to
+  be useless.  IMO this is an obscure/rare use-case.
+
+- Replacing a procedure in the module which happens not to reference
+  any private bindings, or its new definition not needing to do so.
+  IMO this is also an obscure/rare use-case: one needs to be "lucky"
+  for the intended replacement procedure to not need reference private
+  bindings.  If the module has a clear group of procedures that don't
+  reference any private bindings and are redefined often for some
+  reason, perhaps they should be put in an auxiliary module.
+
+- Adding a binding to the module because it logically belongs there.
+  IMO also not a strong point; such bindings could also be added to
+  some auxiliary module.
+
+These features could actually be seen as worth allowing (since doing
+so merely requires not adding explicit restrictions), but the simple
+fully-immutable module model actually has a benefit other than
+intuitive simplicity (which is subjective anyway), which is giving way
+to clear versioning of compiled immutable modules, for static linking
+and perhaps some un-envisioned purposes.  There might also be
+un-envisioned benefits unrelated to versioning.
+
+
+== Why Not Both? ==
+
+After further thinking it becomes apparent that it's simple to allow
+both these complicated-but-perhaps-useful "partially immutable"
+modules, and fully immutable modules, and even a third type with not
+truly private top-levels but full immutability.  After all, truly
+private top-levels and immutable modules are originally orthogonal
+ideas, the former just being useless without the latter due to the
+possibility of adding procedures to a mutable module which mutate
+private bindings which were previously not mutated; however as said,
+the `define-values' approach of hiding private top-levels actually
+removes their true top-level status, alleviating that problem.  Hence
+I would propose three kinds of modules, resulting from different
+combinations of the "use-define-values" and "make-immutable-module"
+options (better names needed):
+
+- Only "use-define-values": this merely reformats the module body into
+  a `define-values' call like at the top of this document, resulting
+  in the complicated kind of "partially immutable" module explained
+  prior.
+
+- Only "make-immutable-module": this makes all bindings of the module
+  immutable (while still allowing to swap out the module at whole) but
+  doesn't hide private top-levels (they can still be referenced via
+  @@, just not set).
+
+- Both: immutable, with only exported bindings visible at all.
+
+As long as the module is immutable (the "make-immutable-module" option
+is used), the module has a definitive version and can be used in
+static linking.  We could allow making immutable copies of modules
+that had been compiled mutable, but a mutably compiled module might
+lack some optimizations that its immutably compiled counterpart has,
+which means it's quite useless since the whole point of static linking
+is to reap every last bit of optimizability (at a very high cost of
+dynamicity).

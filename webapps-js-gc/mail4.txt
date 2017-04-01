@@ -1,0 +1,62 @@
+From: Drew Crawford <drew@sealedabstract.com>
+Subject: Re: On "Why mobile web apps are slow"
+To: Taylan Ulrich B. <taylanbayirli@gmail.com>
+Date: Sun, 8 Sep 2013 20:22:22 -0500 (1 day, 16 hours, 55 minutes ago)
+
+I share your concern for the level of discussion, although perhaps for
+different reasons. I will only bother responding to one point, as it
+is the one that you seemed to take the greatest offense to, and your
+reaction was largely unintelligible to me:
+
+    It is what garbage collectors do, by definition, to collect
+    objects
+    which they can *prove* to be no longer accessible. The halting
+    problem
+    only has implications on static analysis, which is the entire
+    reason
+    garbage-collection is a run-time feature, unlike for example ARC
+    which
+    works through static analysis only and thus cannot break cyclic
+    references that appear at run-time. So it looks like you're
+    unaware of
+    the fundamental workings of garbage-collection, yet write a whole
+    article on it and pretend to be smart. I was hoping that even the
+    most
+    blatant mistakes in your article are due to the unintentional
+    cherry-picking and blindness induced by your bias regarding this
+    topic,
+    but comes out it's nothing else than ignorance.
+
+A proof of my position is given in Morrisett, Felleisen, and Harper's
+"Abstract Models of Memory Management" as Proposition 3.4. Although I
+am quite certain the proof is much older; it is the sort of thing that
+anyone with a solid grasp of computation theory would be able to see
+in a few minutes.
+
+We are faced with some possibilities here. Either it is the case that
+Morrisett, Felleisen, and Harper are incorrect, which I think can be
+rejected out of hand. Then there is I think the most generous outcome
+for you in which you misunderstand my statement to be something other
+than Proposition 3.4, and so perhaps "my" position (which is of course
+your misunderstanding of my position rather than my actual position)
+might indeed be a very ignorant position, but that is hardly my fault.
+Finally there is the possibility that you have correctly understood my
+claim and are just incorrect on the logic.
+
+Whichever case we are in, this is not the time for personal attacks.
+Well, it is never time for personal attacks, so it is bad for that
+reason, no matter what sort of silly argument I have presented. But it
+is especially not time for personal attacks when the position has both
+a formal proof behind it and the support of respected scholars. It
+would be the time to mount a very serious argument on the merits, that
+would require a great deal of best effort, and even then given the
+level of opposing support is realistically likely to fail.
+
+But instead you definitely doubled down on your bet that I am an
+ignorant person. Which I probably am, so it isn't a bad bet; but the
+position in question is certainly not ignorant (cf. it has both a
+proof and academic support), so that fact is not particularly relevant
+to the question. At any rate, we seem to have a pretty fundamental
+disconnect about how to have a proper argument. Certainly further
+discussion on the topic of garbage collectors is not going to shed any
+light on that problem.

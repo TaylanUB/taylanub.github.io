@@ -1,0 +1,204 @@
+<?xml version="1.0"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
+"http://www.w3.txt/TR/xhtml11/DTD/xhtml11.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <title>on Apple's new programming language Swift</title>
+    <meta http-equiv="Content-Type"
+          content="text/html; charset=utf-8"/>
+    <link rel="stylesheet" type="text/css" href="/style.css" />
+  </head>
+  <body>
+    <h1>My response to Apple's claims of innovation</h1>
+
+    <p>Here's the offending page: <a href=
+    "https://developer.apple.com/swift/">Introducing Swift</a></p>
+
+    <p>The page claims that "Swift is the result of the latest
+    research on programming languages" and goes on to mention that
+    "inferred types make code cleaner and less prone to mistakes,"
+    which are <strong>a feature <a href=
+    "http://www.cis.upenn.edu/~bcpierce/types/archives/1988/msg00042.html"
+    >whose roots date back to the 50s</a></strong> and have first been
+    famously used in the <a href=
+    "https://en.wikipedia.org/wiki/ML_(programming_language)">ML
+    programming language</a> (1972); and mentions that "modules
+    eliminate headers and provide namespaces" which date back to who
+    the fuck knows; and says that "memory is managed automatically"
+    even though it uses reference counting (RC), thus <strong>fails at
+    collecting cyclic structures</strong> unless some links in them
+    are explicitly declared weak to break up the cycle.  Contrast this
+    to garbage collection (GC), which <a href=
+    "http://www-formal.stanford.edu/jmc/recursive.html">dates back to
+    around 1960</a>, has no problems with cyclic structures, and <a
+    href="ftp://ftp.cs.utexas.edu/pub/garbage/gcsurvey.ps"> is
+    understood to perform better than reference counting</a>.</p>
+
+    <p>(To be more precise, I've been unable to find a good comparison
+    of well-optimized RC and well-optimized GC; although the latter <a
+    href="http://hboehm.info/gc/myths.ps">has been shown to perform
+    (significantly) better for naive implementations</a>.  Most
+    research seems willing to dismiss RC from the get-go since it
+    fails to handle cyclic garbage anyway.  However, <a
+    href="../webapps-js-gc">don't believe lies about GC performing
+    badly</a>, and <a href="http://hboehm.info/gc/#further">do your
+    own reading</a> if you want to be well-informed.)</p>
+
+    <p>But the killer feature of Swift is, of course, that "you don’t
+    even need to type semi-colons."  That's 21st century innovation
+    for you.</p>
+
+    <p>Let's look at the bulleted feature-list on that page.</p>
+
+    <h3>Closures unified with function pointers</h3>
+
+    <p>This is a fancier way to say "we support closures, and this
+    time the language doesn't have the horrible design flaw of
+    treating them and other functions as distinct data types," in
+    other words the "unified with function pointers" part is just
+    utter marketing bullshit.</p>
+
+    <p>Closures themselves, which ought to be the <strong> only
+    </strong> type of function in a language, date back to at least
+    1975: <a href=
+    "ftp://publications.ai.mit.edu/ai-publications/pdf/AIM-349.pdf">
+    the original Scheme report</a> briefly explains how they can be
+    compiled to efficient code.</p>
+
+    <h3>Tuples and multiple return values</h3>
+
+    <p>Depending on where you look, tuples are more or less nothing
+    but fixed-length arrays, in any case a trivial data structure.
+    Lumping this together with multiple-value (MV) returns, by the
+    way, shows only the ignorance (or willingness to flaunt and
+    deceive) of the author: the whole POINT of MV returns is to avoid
+    creating a data structure for the return value and having to
+    destructure it again at the call-site; there will generally be
+    syntactic support for directly populating a number of variables
+    with the returned values, or passing them as the arguments for
+    another function instead.</p>
+
+    <p><b>Correction:</b> That's my ignorance.  In a statically typed
+    language, working with tuples does not necessitate creating and
+    destructuring data structures at run-time.</p>
+
+    <p>This strategy dates back at least to 1994; probably (much?)
+    older but I can't be arsed to look around, my reference of 1994 is
+    ANSI Common Lisp (CL).  You can browse the <a href=
+    "http://www.lispworks.com/documentation/HyperSpec/Front/"> Common
+    Lisp HyperSpec</a> (CLHS) online, which is essentially ANSI CL in
+    HTML form.</p>
+
+    <p>Scheme also has had MV returns standardized in <a href=
+    "http://groups.csail.mit.edu/mac/ftpdir/scheme-reports/r5rs.ps">
+    R5RS</a> which is from 1998.</p>
+
+    <h3>Generics</h3>
+
+    <p>These date back at least to the Common Lisp Object System
+    (CLOS), again from ANSI Common Lisp.  See <a href=
+    "http://www.lispworks.com/documentation/lw50/CLHS/Body/m_defgen.htm"
+    >defgeneric</a> in the CLHS.</p>
+
+    <h3>Fast and concise iteration over a range or collection</h3>
+
+    <p>You mean like in pretty much any programming language since
+    FORTRAN?</p>
+
+    <p>I mean, OK, many languages make it unnecessarily verbose and
+    cumbersome to iterate over collections and/or ranges, but it's
+    never more than some trivial syntax that's needed to lift that
+    annoyance.  Be it with a <a href=
+    "https://en.wikipedia.org/wiki/Hygienic_macro">hygienic macro</a>
+    system, or built-in syntax like dozens of languages nowadays have.
+    It's incomprehensible to me why someone would flaunt this as a
+    major selling point of a language in this day and age.</p>
+
+    <p>(Oh and would you look at that Wikipedia page; apparently
+    Dylan, a previous language by Apple, had hygienic macros!
+    Nowadays people don't know what they are, I'm not sure why, maybe
+    because the overlords deemed the masses too stupid to make good
+    use of them.)</p>
+
+    <h3>Structs that support methods, extensions, protocols</h3>
+
+    <p>So like any language supporting OOP?  After spending too much
+    energy on the last point, I'm just going to shut up about
+    this.</p>
+
+    <h3>Functional programming patterns, e.g.: map and filter</h3>
+
+    <p>Presumably McCarthy's original LISP had these. To give a
+    concrete reference, have a <a href=
+    "http://www.softwarepreservation.org/projects/LISP/MIT/Moon-MACLISP_Reference_Manual-Apr_08_1974.pdf"
+    >MACLISP Reference Manual</a> from the freaking <em>Software
+    Preservation Group</em>, because that thing is more or less
+    literally a relic.  It's from 1974.  It's also what they first
+    implemented Scheme on, so some good history there.  Page 33 has
+    <em>delete</em> (like <em>filter</em>), page 83 explains
+    <em>map</em>.  What, you thought functional programming was
+    something new?</p>
+
+    <p>On to other stuff.</p>
+
+    <h2>Interactive Playgrounds</h2>
+
+    <p>That section basically explains the development method used by
+    Lisp users since times of yore.  The concept of a REPL which Swift
+    mentions so proudly dates back once more to the oldest Lisp
+    implementations.  Lisp machines and Smalltalk IDEs have long been
+    praised for their interactivity.  So yeah, welcome to the 80s, or
+    something.  I won't link to sources here, my head is hurting.</p>
+
+    <h2>Designed for Safety</h2>
+
+    <p>Under this section we see a lot of things listed which are the
+    bread and butter of any modern high-level language.  And with
+    modern I mean anything that popped up since ten years before my
+    birth.  That is, the 80s, I'm not very old.</p>
+
+    <h2>Fast and Powerful</h2>
+
+    <p>If you compare Swift to languages like Perl, Python, Ruby, and
+    JavaScript, it might seem nice that it's been designed with native
+    compilation as a first-class goal despite seeming to be a
+    "scripting language" kind of convenient, interactive language, but
+    compiling properly high-level languages (which is to say I'm
+    excluding "portable assembly" languages like C) to native code and
+    getting high performance is surely nothing new; just look at
+    OCaml, Haskell, or some Scheme implementations.  Especially Scheme
+    in this case, since it's a similarly "scripty" language.  In any
+    case, there is no innovation here.</p>
+
+    <h1>Summary</h1>
+
+    <p>Swift is not an innovative language.  It has nothing new, and I
+    don't see it coming from any outstanding research background.
+    Apple merely came up with an acceptably "modern" language to use
+    instead of the disgusting cruft that is Objective-C.  If you want
+    to see nifty new programming language features you might want to
+    look at <a href="http://www.rust-lang.org/">Rust</a> instead,
+    which actually came up with some ideas that seem to be new.</p>
+
+    <p>Oh and:</p>
+
+    <p><em>Indeed, one of my major complaints about the computer field
+    is that whereas Newton could say, "If I have seen a little farther
+    than others, it is because I have stood on the shoulders of
+    giants," I am forced to say, "Today we stand on each other's
+    feet." Perhaps the central problem we face in all of computer
+    science is how we are to get to the situation where we build on
+    top of the work of others rather than redoing so much of it in a
+    trivially different way. Science is supposed to be cumulative, not
+    almost endless duplication of the same kind of things.</em> --
+    Richard Hamming, <strong>1969</strong></p>
+
+    <p style="font-size: 0.7em;"> Site design inspired by <a href=
+    "http://motherfuckingwebsite.com/"> motherfuckingwebsite.com </a>.
+    </p>
+
+    <p style="font-size: 0.7em;">Copy whatever the hell you want from
+    this page.</p>
+
+  </body>
+</html>

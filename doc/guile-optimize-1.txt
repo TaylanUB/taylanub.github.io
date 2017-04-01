@@ -1,0 +1,159 @@
+== Guile Top Level and Module Optimizability ==      -*- mode: org -*-
+
+
+* Situation
+
+- Currently, no optimization can be done on top-level references,
+  including module imports and even module-private top-levels.
+- This is because all top-levels are mutable from anywhere, even if
+  module-private.
+- This is partly a neat feature, making everything changeable at
+  run-time.  We can probably do better though.
+
+** In poncy words
+The "atomic compilation unit" in Guile is a procedure, whose body is
+opaque and immutable from the outside once the procedure is created;
+there is no larger opaque/compiled structure: the state of a Guile
+program incorporates a dictionary of object bindings (some of which
+are said opaque procedures), which are globally mutable, meaning that
+an optimizer can never make assumptions on what a top-level binding
+will refer to without doing whole-program analysis.  From this point
+of view, "Guile doesn't have modules at all!"  The module system only
+controls the visibility and names of bindings; you don't get your own
+binding when you import something from a module.  (E.g. using `set!'
+on an imported variable affects the module itself and all users of it,
+so the imported variable really is a global variable!)  For better
+optimization possibilities, we can benefit from bigger opaque
+structures.
+
+
+* Improvements
+
+** Intra-module optimizability through immutability and opacity
+*** Immutable modules
+- Disallow mutating top-level bindings in a module from the "outside,"
+  making it possible to determine via static analysis on a single
+  module whether a binding is ever mutated; this should be achievable
+  via:
+  - Remove/limit some parts of the reflective module API.
+  - Make module imports immutable bindings.
+- This will give way to intra-module optimizations, i.e. on references
+  a module makes to its own top-levels.  It doesn't help with module
+  imports though, because of the two following points.
+- A module can still trivially provide a variable that is settable
+  from the outside, by exporting a setter procedure.  (Just use
+  parameters anyway?)
+- While monkey-patching parts of the module is made impossible, it
+  can still be swapped out as one piece.
+- We must have a way to turn these intra-module optimizations on and
+  off while compiling a module; modules that have been compiled
+  without it would still allow monkey-patching of internals, which is
+  invaluable during development (think C-M-x in Emacs/Geiser) and
+  might be otherwise preferable for whatever reasons.
+*** Truly private top-levels
+- Make non-exported top-level bindings entirely invisible to the
+  outside (not merely immutable).  This means removing/limiting
+  another part of the reflective module API.
+- This will allow some more intra-module optimizations.  E.g. when we
+  can determine via escape analysis that a private top-level is never
+  made available to the module's users, and if all usages of the
+  top-level can otherwise be inlined, then the top-level can be
+  eliminated entirely from the executable image; this would be
+  impossible if we allowed referencing of private top-levels from the
+  outside via the module API.
+- For tooling purposes, it could still be allowed to retrieve
+  meta-data of said private top-levels, e.g. a docstring.
+**** The implicit exports problem
+     It might be difficult for a static analyzer to determine whether
+     a variable can be mutated due to appearing in the body of any
+     exported macros.  In an initial version one could stop trying to
+     optimize references to any variables that appear within macro
+     bodies; a more sophisticated analyzer could find out which of
+     these occurrences give the possibility of the variable being
+     mutated.  (I think, other than appearing as an argument to set!
+     (which also applies outside macro bodies), the only such
+     situation is when the variable appears as an argument to an
+     argument to the macro.)
+
+*** In poncy words
+We essentially change our "atomic compilation unit" to be modules
+instead of procedures; the state of our Guile programs now incorporate
+not a singular mutable dictionary, but a mutable set of smaller
+immutable dictionaries.  (Actually, since this method of compilation
+will be disable-able on a per module basis, we will have a blend of
+the two.)  In the case of truly private top-levels, these dictionaries
+hold exported bindings only, and private top-levels are not part of
+global state at all anymore.
+
+** Inter-module optimizability through static linking
+- Guile's compilation units link to each other dynamically, both
+  currently and after the application of the above proposal; top-level
+  bindings are dynamic links, ultimately mutable no matter in what
+  way, whether through direct mutation, or the swapping out of whole
+  modules at once.  (An exception being private top-levels, after the
+  "truly private top-levels" proposal, which are static if set! is
+  never called on them.)
+- We could have optional static linking, having compiled code make
+  private copies of referenced top-level bindings (copies of the
+  bindings, not copies of the objects bound).  After that, nothing
+  could change the object captured by the compiled code.
+- Retaining run-time flexibility gets a yet higher cost: we now have
+  to recompile and swap out both the module that provides a binding,
+  and all modules using the binding, for to fully change an object in
+  the system.
+- The kind of optimizations made possible by this is huge.  Calls to
+  car, vector-ref, etc. can be inlined, or eliminated entirely if used
+  on a constant, procedure type-checks on loops can be eliminated,
+  etc.
+- Does this recompilation of modules necessarily have to be done
+  automatically and for all modules using a binding?  The whole
+  "swapping whole modules" machinery is a semantic extension to the
+  language, providing an orthogonal way to set! to mutate bindings;
+  there is no problem (or is there?) having an old version of an
+  object linger around and continue to be used even though the module
+  from which it was imported has been swapped out and the binding that
+  had provided it points to another object now (or is unbound).
+
+*** Detecting code that needs recompilation
+- For both the above mentioned functionality, and other situations of
+  compile-time linkage/usage (basically just macros, which are an
+  instance of compile-time usage), it would be useful (or mandatory if
+  we want to fully automate recompilation) to automatically detect
+  pieces of code that link to or used old versions of a binding that
+  has since been changed.
+- The automatic detection would consist of three actions: recording
+  the linkage/usage of an object during compilation, looking up
+  records during recompilation of an object to see whether we're
+  repeating a compilation that previously linked/used an object but
+  doesn't do so this time, and looking up records during redefinition
+  of an object to see whether we're redefining an object that has had
+  compile-time linkers/users.  All three actions are inherently
+  compile-time, so we have no run-time overhead, though we have size
+  overhead for the records.  When compiling an immutable module
+  (i.e. with intra-module optimization enabled), the check for each
+  linked/used object needs happen only once, so compilation time
+  shouldn't suffer much.
+
+
+* Further reading
+  http://lists.gnu.org/archive/html/guile-devel/2009-09/msg00023.html
+  http://lists.gnu.org/archive/html/guile-devel/2013-04/msg00188.html
+
+
+* Discarded ideas
+- As an alternative to making module imports immutable, we could make
+  them privately owned, separate bindings, meaning that one can use
+  set! on them and have it take effect in the current scope but not
+  affect the binding in the module itself or other users of it.  The
+  thought was that this would be simple to implement with existing
+  machinery, not needing to implement immutable bindings, however this
+  was a faulty assumption because "what happens when the module that
+  exported the binding calls set! on it?"  In my opinion this should
+  definitely affect the imported bindings in users of the module,
+  meaning that the binding does need to be the same one, lest we
+  implement yet another machinery for "indirect bindings" that see
+  changes in a pointed-to binding and destroy the pointer/indirection
+  when set! is called on them.  I don't see merit in that
+  complication, since overwriting a module import by using set! on it
+  and destroying the binding to the module is not something useful
+  anyway from what I can imagine.

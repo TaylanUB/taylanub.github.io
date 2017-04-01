@@ -1,0 +1,228 @@
+<!DOCTYPE html PUBLIC
+"-//W3C//DTD XHTML 1.1//EN"
+"http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <title>On &quot;Why mobile web apps are slow&quot;, garbage
+    collection, and viral misinformation</title>
+    <meta http-equiv="Content-Type"
+          content="text/html; charset=utf-8" />
+    <link rel="stylesheet" type="text/css" href="/style.css" />
+  </head>
+  <body>
+    <h1>On &quot;Why mobile web apps are slow&quot;, garbage
+    collection, and viral misinformation</h1>
+    <p>
+      A certain article has been enjoying great publicity and
+      appreciation lately.  I found some claims it makes to be
+      unfitting to my existing knowledge of garbage collection (not
+      claiming it to be much) so I tried to find out who was in the
+      wrong and looked into the topic at some depth.  Comes out that
+      what we have at hand contains some nasty misinformation.  Viral
+      misinformation.
+    </p>
+    <p>
+      The following e-mails are an exchange between me and the author
+      of "Why mobile web apps are slow", Drew Crawford.  (The first
+      e-mail was a copy of a blog comment of mine, i.e. I intended
+      this to be public; said comment was deleted from the blog.)  The
+      article is to be found <a href=
+      "http://sealedabstract.com/rants/why-mobile-web-apps-are-slow/"
+      >here</a>, and from many other blogs linking to and praising it.
+      The discussion is mainly centered around garbage collection,
+      proving Crawford's claims to be based on factual inaccuracies,
+      and showing his general lack of in-depth knowledge on the topic.
+      This might seem like resorting to ad hominem, but I'd like to
+      make a point of it since the tone and style of Crawford's
+      article implies that he has a certain authority over the topic,
+      which probably makes many readers take it as truth without an
+      in-depth look into the factual accuracy of the presented
+      information, or the coherence of the final interpretation of
+      represented facts.
+    </p>
+    <ol>
+      <li><a href="mail1.txt">forth</a></li>
+      <li><a href="mail2.txt">back</a></li>
+      <li><a href="mail3.txt">forth</a></li>
+      <li><a href="mail4.txt">back</a></li>
+      <li><a href="mail5.txt">forth</a></li>
+    </ol>
+    <p>
+      (Note that I'm publishing these e-mails as is (I fixed one typo
+      of mine), and had not planned to do so prior; any significant
+      mistakes of my own are preserved just as well as Crawford's.
+      Specifically, my arguments on anything outside the topic of
+      garbage collection are not particularly strong, I retract any
+      hard claims there.)
+    </p>
+    <h2>Summary of the e-mail exchange</h2>
+    <ul>
+      <li>The article cites "Quantifying the Performance of Garbage
+      Collection vs. Explicit Memory Management" by Hertz and Berger,
+      whose benchmarks show the best GC they test to be 17% slower at
+      3x the memory of the minimum required to run the benchmark, and
+      equivalent or slightly better at 5x, compared to <strong> manual
+      </strong> memory management.  Crawford takes all the worse
+      performing collectors into account and concludes that "as long
+      as you have about 6 times as much memory as you really need,
+      you're fine.  But woe betide you if you have less than 4x the
+      required memory."  What the hell?
+      </li>
+      <li>The cited paper seems to have flaws of its own.  For manual
+      management they use something based on "the best overall
+      allocator of which [they] are aware", from Doug Lea; for the
+      garbage collectors, I can't be sure but, they reference a 1960
+      document from John McCarthy (may he rest in peace) for
+      MarkSweep, a 1969 document for SemiSpace, and a 1989 document
+      for the Appel-style generational collectors (GenCopy and GenMS,
+      the latter being the best performing in the paper).  A listing
+      of collector-algorithm definitions references a 2004 paper by
+      Blackburn.  The paper itself is from 2005.  GC technologies
+      surely have <strong>not</strong> stalled since then; see for
+      instance advances on the Lua front (e.g. quad-color mark-sweep).
+      </li>
+      <li>The paper compares GC to manual memory management.  Crawford
+      mentions automatic reference counting (ARC) instead.  Reference
+      counting (whether automatic or not) is not equivalent to manual
+      memory management, and has its own costs; reference counting in
+      general is <a
+      href="ftp://ftp.cs.utexas.edu/pub/garbage/gcsurvey.ps"
+      >considered inferior</a> to good tracing algorithms, and I'm not
+      aware of any benchmarks of ARC specifically vs. a good GC on the
+      same platform; possibly it does work better for Objective-C or
+      other components specific to Apple's platform, but not in
+      general or due to any inherent inefficiencies in GC.  (Only
+      recently (<a
+      href="http://dl.acm.org/citation.cfm?doid=2258996.2259008"
+      >2012</a>, <a
+      href="http://users.cecs.anu.edu.au/~steveb/downloads/pdf/rcix-oopsla-2013.pdf"
+      >2013</a>) have there been papers about reference counting
+      implementations reaching the performance of tracing GC, and
+      obviously these are different beasts than what we have in
+      practice today.)
+      </li>
+      <li>In the "related work" section of the paper, we see mentions
+      of other research that finds better results for GC, notably
+      "[Zorn] finds that the Boehm-Demers-Weiser collector is
+      occasionally faster than explicit memory allocation, but that
+      the memory consumed by the BDW collector is almost always higher
+      than that consumed by explicit managers, ranging from 21% less
+      to 228% more."  That is ~3.3x memory at worst, with occasional
+      better performance, for a conservative collector (BDW).  Compare
+      again to Crawford's bold statement: "But woe betide you if you
+      have less than 4x the required memory."  Well, 3.3 is less than
+      4.
+      </li>
+      <li>Crawford is apparently not familiar with language
+      specifications, thinking that they must specify an
+      implementation and not a language.  He mocks ECMA 6 for not
+      telling how to implement a garbage collector, and instead only
+      specifying the behavior of it.  This is only tangentially
+      related to the topic; I believe it proves a point about
+      Crawford's general authenticity on computer science (which
+      doesn't need to mean that he is a bad programmer).
+      </li>
+      <li>Crawford claims that the ECMA 6 specification of a garbage
+      collector is actually impossible to implement anyway.  He cites
+      "Abstract Models of Memory Management" by Morrisett, Felleisen,
+      and Harper, which explains that the halting problem can be
+      reduced to an "optimal" garbage collector.  An optimal collector
+      in this context is one which can decide which variables, even if
+      still in scope, will not be referenced in the future.  In the
+      immediately following section, the paper explains how one can
+      instead implement a "reachability based" collector; ironically,
+      ECMA 6 not only obviously specifies a reachability based
+      collector, it even uses the exact term "reachability" in its
+      prose, which Crawford even quotes in his article.  Adding to the
+      irony, the previously cited (GC benchmarking) paper explains
+      that there is no significant difference between a reachability
+      based collector, and a "liveness" based one (as they call it)
+      which really collects objects after their last use in the
+      program even if variables that reference them remain in scope.
+      (They do this by analyzing the run-time of a program, then
+      running the exact same program in the exact same way; it's not
+      that they solve the halting problem. :-) ) This is unsurprising
+      since it is good programming practice to limit variables' scope
+      to places in which they are also really used.  All of this
+      strongly indicates that Crawford does not carefully read any
+      papers he cites, and does not even know what garbage collection
+      <em>is</em>, even after having written his much-praised article
+      on the topic.
+      </li>
+    </ul>
+    <h2>Other sources</h2>
+    <p>
+      Please also see <a href=
+      "http://www.codenameone.com/3/post/2013/07/why-mobile-web-is-slow.html"
+      >this article</a>, which touches some good points and seems, to
+      me, to be written by a significantly more professional person
+      (Shai Almog).  One thing I dislike about the article is that
+      despite how much it explains Crawford to be wrong, it softens up
+      and claims that Crawford's article is "well written and very
+      well researched" and that Almog "[accepts] almost everything
+      [Crawford] said but [has] a slightly different interpretation on
+      some of the points."  This is possibly because the author didn't
+      have time and/or motivation for controversy. :-)  Crawford's
+      article was obviously very badly researched (at least regarding
+      garbage collection), despite the effort put into it.
+    </p>
+    <p>
+      There is also <a href=
+      "http://www.excelsior-usa.com/blog/java/5plus-garbage-collectors/"
+      >this benchmarking</a> of the modern JVM GC, whose results show
+      negligible performance difference at a mere 1.2x memory
+      consumption.  The page also mentions that the GC algorithms
+      mentioned in the paper cited by Crawford do indeed seem to be
+      typical <em>primitives</em> used to implement more
+      sophisticated, "real world" collectors.
+    </p>
+    <p>
+      Hans Boehm, author of the Boehm-Demers-Weiser garbage collector,
+      has a brief presentation on <a href=
+      "http://www.hpl.hp.com/personal/Hans_Boehm/gc/myths.ps" >Memory
+      Allocation Myths and Half−Truths</a>.
+    </p>
+    <h2>Grand summary</h2>
+    <p>
+      At <strong>least</strong> on garbage collection, and very likely
+      other topics touched in the article too (though I don't have
+      proof regarding those), Drew Crawford unfortunately proves to be
+      ignorant, and unwilling to accept of and relieve his ignorance;
+      the article's claims on garbage collection seem to be the result
+      of this ignorance, coupled with self-misinformation and
+      over-confidence.  I apologize for stark language.  (Misinforming
+      masses of programmers who trust in your blog is not OK!)
+    </p>
+    <p>
+      The article cherry-picks an academic paper, which seems to have
+      flaws of its own, then vastly misinterprets and misrepresents
+      its results, making ridiculous claims.  Crawford makes some
+      attempts at justifying the content, but ends up proving further
+      ignorance and a tendency to misinterpret academic papers.
+    </p>
+    <p>
+      I ask for anyone to not trust Crawford's articles without
+      careful insight.
+    </p>
+    <p>
+      More importantly, <strong>I ask for everyone to remain skeptic
+      on whatever they read, if it doesn't come from an acknowledged
+      domain expert (and ideally even then), <em>no matter</em> how
+      authentic the writing seems to be.</strong> These kinds of
+      articles, looking great on the surface, yet containing huge
+      amounts of well-presented misinformation, seem extremely
+      dangerous to me.  Computer science ain't easy.
+    </p>
+    <p style="font-size: 0.7em;">
+      Site design inspired by
+      <a href="http://motherfuckingwebsite.com/"
+         >motherfuckingwebsite.com</a>.
+    </p>
+    <p style="font-size:0.7em">
+      Feel free to copy anything from this page (including my
+      e-mails), in part or in whole. I shamelessly published
+      Crawford's e-mails alongside mine without explicit prior notice,
+      so perhaps refrain from doing the same.
+    </p>
+  </body>
+</html>

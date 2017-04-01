@@ -1,0 +1,61 @@
+Aptitude package management guide for control freaks:
+
+* The aptitude pattern '~E | ~prequired | ~pstandard | ~pimportant'
+  gives the "base" Debian system.  You should have hardly any packages
+  listed when you group that expression and add '!~i' (not installed):
+
+  aptitude search '(~E | ~prequired | ~pstandard | ~pimportant) !~i'
+
+  (Possibly, some packages that were standardized, made important
+  etc. after you installed your system will appear.)
+
+* Negating said pattern (which is equal to '~poptional | ~pextra')
+  gives all non-base packages.  Add "~i" to get installed non-base
+  packages, and further add "!~M" to exclude dependencies (~M means
+  auto, not manual; don't ask).  You should end up with a relatively
+  short list, which includes non-base stuff you installed explicitly,
+  and non-base stuff that was installed for whatever reason; you can
+  pick out stuff from here to remove; mark them as auto-installs and
+  run 'apt-get autoremove' to safely remove the unneeded ones.
+
+* Apt's default configuration will not autoremove a package when it's
+  "suggested" by a currently installed one.  This can be changed by
+  creating a file in /etc/apt/apt.conf.d, say "99suggests", containing
+  the line 'APT::AutoRemove::SuggestsImportant "false";'.
+
+  WARNING: Some very important packages, like grub-pc, are not in the
+  "base" system mentioned above, and might get autoremoved after doing
+  the above if you don't mark them as manual installations.
+
+* If you keep a list of explicitly desired packages, my-packages.txt,
+  you can check your system against this list the following way:
+
+** Mark all "base" packages as manual installations:
+
+   aptitude unmarkauto '~E | ~prequired | ~pstandard | ~pimportant'
+
+** Compare that list of packages plus your explicit package list
+   against the list of manually installed packages:
+
+   apt_list(){ aptitude search -F %p --disable-columns "$@"; }
+   
+   base='~E | ~prequired | ~pstandard | ~pimportant'
+   manual='~i !~M'
+   
+   diff -y --suppress-common \
+        <(apt_list "$base" | sort -u - my-packages.txt) \
+        <(apt_list "$manual")
+
+** In the output of the above, the left column will show packages you
+   desire but don't have installed; the right column will show
+   packages that you may want to remove; mark them as auto-installs
+   and run 'apt-get autoremove'.
+
+Note: sometimes after you've run 'apt-get update' and some "base"
+package has a newer version but you still have old one installed, or
+don't have configuration files of the old one pruned, or it's still in
+your database for some other reason, then it will pop up in the "base"
+package list explained in the first point.  Run "apt-get dist-upgrade"
+and "aptitude purge '~c'" and "aptitude autoclean" to prevent this.
+
+This guide provided to you by a patient of OCPD.  (... not really.)

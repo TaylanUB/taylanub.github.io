@@ -1,0 +1,190 @@
+From: taylanbayirli@gmail.com ("Taylan Ulrich Bayırlı/Kammer")
+Subject: Top-levels, modules, optimizability
+To: guile-devel@gnu.org
+Date: Thu, 31 Oct 2013 22:52:44 +0100 (2 days, 20 hours, 44 seconds ago)
+
+I have a set of proposals for making Guile Scheme more optimizable.
+My knowledge of Guile internals is lacking, but I hope these ideas
+will be useful from a high-level perspective, at the very least to
+ignite some thoughts.
+
+If feedback is positive, I will try and allocate a good chunk of my
+free time to actually trying to implement these, however long it takes
+me; I'm aware the existing developers are already quite busy. :)
+
+
+* The current situation
+
+All top-levels, including non-exported ("private") ones, are
+essentially global mutable variables, so no static optimization can be
+done on references to them.
+
+For some purposes this is very neat.  Especially during development
+with Emacs/Geiser, the ability to just do C-M-x on any top-level is
+invaluable in my opinion, so I desire we keep a compilation mode that
+behaves as currently, even if the default behavior is changed or more
+optional behaviors added.
+
+I propose three changes/features, the first two of which give way to
+*intra*-module optimizations only (i.e. on references a module makes
+to its own top-levels), and the third to inter-module optimizations
+(i.e. on references to module imports):
+
+1. Immutable modules
+2. Truly private top-levels
+3. Static linking
+
+
+* Immutable modules
+
+A module can be compiled as an "immutable" one, meaning essentially
+that `module-define!', `module-add!', `module-set!' and the like
+cannot be used on it, and that variables imported from it are
+immutable.  This means that static analysis of the module can tell
+whether a top-level binding can ever be mutated; if not, relevant
+optimizations can be done, like removing type-checks and inlining.
+
+(I'm not sure if calling such modules "immutable" is an abuse of
+terminology, since they can have mutable state; I will call them so
+for simplicity.)
+
+Such a module can still trivially export a setter-procedure for a
+variable.  (Arguably one should use parameters for this anyway.)
+
+While monkey-patching of individual bindings is made impossible for a
+module compiled as such, there would be a mechanism to replace a
+module at whole (e.g. with a newly compiled version), in effect
+mutating all bindings it exports.
+
+I think this is desirable as default behavior, giving a good trade-off
+between optimizability and dynamicity.  The two following proposals
+also essentially build upon this one.
+
+
+* Truly private top-levels
+
+If private top-levels were truly private, i.e. `module-variable',
+`module-ref' and the like couldn't see them, some more optimizations
+would be possible.  For instance a top-level whose every use in the
+module is inlined could be removed entirely from the compiled image.
+
+I don't know yet of any significant optimizations made possible by
+this, however I think it's more intuitive anyway to have private
+top-levels to be actually private, so I think this is also desirable
+as default behavior.
+
+
+* Static linking
+
+There would be an option, while compiling a module, to link statically
+to an imported module.  From the perspective of the immutable modules
+idea, this means linking to the currently (during compilation) loaded
+version of an immutable module.  This allows the (long-desired?) type
+of optimization that is to inline calls to `car', `vector-ref', etc.,
+or even eliminate them entirely when they're called on a constant.  On
+the other hand, it means one has to recompile a module to make it see
+changes in a module it had linked to statically during its previous
+compilation; for this reason this should most certainly NOT be default
+behavior, instead modules that want said optimizations would specify
+explicitly that they want to do a "static-import" on certain modules.
+
+
+* Appendix A: The implicit exports problem
+
+It might be difficult for a static analyzer to determine whether a
+variable can be mutated due to appearing in the body of any exported
+macros.  (Or is it?  I'm ignorant here.)  In an initial version one
+could stop trying to optimize references to any variables that appear
+within macro bodies; a more sophisticated analyzer could find out
+which of these occurrences give the possibility of the variable being
+mutated.  (I think, other than appearing as an argument to set! (which
+also applies outside macro bodies), the only such situation is when
+the variable appears as an argument to an argument to the macro?)
+
+Are procedural macros a problem here?  I think not; an analyzer just
+needs to look into calls to `syntax' to see what variables from the
+macro-definition scope (from the module that is being compiled) are
+captured for the macro output.  `datum->syntax' necessarily gets its
+`for-syntax' argument from the macro-caller scope if I'm not mistaken,
+so it cannot result in bindings to the macro-definition scope.
+
+
+* Appendix B: Detecting code that needs recompilation
+
+For both static linking, and the existing problem of redefinitions of
+macros not taking effect on already-compiled code, it would be useful
+to automatically detect code that needs recompilation.  I think this
+automatic detection would consist of three actions: recording the
+linkage/usage of an object during compilation, looking up records
+during recompilation of an object to see whether we're repeating a
+compilation that previously linked/used an object but doesn't do so
+this time, and looking up records during redefinition of an object to
+see whether we're redefining an object that has had compile-time
+linkers/users.  All three actions are inherently compile-time, so we
+have no run-time overhead, though we have size overhead for the
+records.  When compiling an immutable module, the check for each
+linked/used object needs to happen once only, so compilation time
+shouldn't suffer much either.
+
+If such a system is implemented and works well, then the recompilation
+of modules could perhaps be automated, making the static linking
+situation transparent insofar compilation times are bearable.
+
+
+* Appendix C: Red herrings, discarded thoughts
+
+** Copying bindings on import
+
+As an alternative to making module imports immutable, we could make
+them privately owned, separate bindings, meaning that one can use
+`set!' on them and have it take effect in the current scope but not
+affect the binding in the module itself or other users of it
+(essentially destroying the binding to the module).  The thought was
+that this would be simple to implement with existing machinery, not
+needing to implement immutable bindings, however this was a faulty
+assumption because "what happens when the module that exported the
+binding calls `set!' on it?"  In my opinion this should definitely
+affect the imported bindings in users of the module, meaning that the
+binding does need to be the same one, lest we implement yet another
+machinery for "indirect bindings" that see changes in a pointed-to
+binding and destroy the pointer/indirection when `set!' is called on
+them.  I don't see merit in that complication, since overwriting a
+module import by using `set!' on it and destroying the binding to the
+module is not something useful anyway from what I can imagine.
+
+** Truly private top-levels at the absence of immutable modules
+
+One can be led to believe that truly private top-levels can be useful
+on their own, at the absence of immutable modules, because "one could
+at least optimize on references to the private top-levels when they
+are never mutated with `set!'" ... the wrongness of this idea becomes
+apparent as one realizes that a mutable module could at any time have
+a procedure added to it which calls `set!' on a private top-level.
+
+** Static linking at the absence of immutable modules
+
+My first thought for static linking was that it would be independent
+of immutable modules, and that the static linking would only happen
+for bindings which don't appear as `set!' arguments, whereas other
+bindings are usual dynamic links and would be affected by the
+replacement of immutable modules and usage of the module API.  This is
+obviously a bad idea because then those bindings will get out of sync
+with the rest of whichever module was statically linked.  Everything
+is simple and logical when static linking builds strictly upon
+immutable modules, the linking happening to a specific immutable
+version of a module.
+
+
+* Further reading
+
+ML archives:
+http://lists.gnu.org/archive/html/guile-devel/2009-09/msg00023.html
+http://lists.gnu.org/archive/html/guile-devel/2013-04/msg00188.html
+
+My personal notes, more or less identic in content to this e-mail but
+with different wording:
+http://taylanub.github.io/doc/guile-optimize-1.txt
+
+
+Regards,
+Taylan

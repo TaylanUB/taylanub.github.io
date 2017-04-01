@@ -1,0 +1,36 @@
+How to bring sanity into user-mode systemd usage.
+
+
+First:
+
+Create /etc/systemd/system/user@.service.d/00env.conf, i.e. a
+"drop-in" (more like merge-in; can override and amend stuff) for
+user@.service (which is in /lib/systemd so it shouldn't be edited),
+with the contents:
+
+[Service]
+ExecStart=
+ExecStart=/bin/sh -l -c 'systemd --user'
+
+That means override the ExecStart field (first needs to be cleared
+with the line setting it to empty) to wrap the systemd call in 'sh -l'
+to make it read my ~/.profile and so get my desired environment in
+systemd and all processes it launches.
+
+
+Second:
+
+Now my user systemd instance has the SYSTEMD_UNIT_PATH env var from my
+~/.profile and successfully loads stuff from ~/etc/systemd instead of
+the stupid default path, and in that directory I have:
+
+1. my service files, each also using /bin/sh to launch the process
+because ExecStart is stupid and expects absolute executable paths
+instead of traversing $PATH, and
+
+2. default.target.d/init.conf where I list all said services as
+dependencies of this default.target (a pseudo-service that's started
+up by default so you can trigger other stuff from there).
+
+
+Done!

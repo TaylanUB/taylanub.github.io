@@ -1,0 +1,56 @@
+;;; -*- mode: scheme -*-
+
+(define-syntax test
+  (lambda (x)
+    (syntax-case x ()
+      ((_ var form) (identifier? #'var)
+       (begin
+         (display "Yo I'm in a macro and I'm displaying this string in the
+macro-expansion phase!\n")
+         #'(let ((var 'blah))
+             form))))))
+
+;;; Let's go through it:
+
+(define-syntax test
+  (lambda (x) ;Unlike `syntax-rules', the fact that macro transformers are
+              ;procedures is exposed.  We could have a convenience syntax to cut
+              ;off this part, but when using `syntax-case' one often wants
+              ;helper procedures, which can be defined locally in this lambda
+              ;form.  The argument to the procedure is the whole macro-call
+              ;form, i.e. (test ...), but not an s-expression but an object of
+              ;type "syntax".
+    (syntax-case x () ;The first argument is the syntax object we want to work
+                      ;on; the second is the literals list as in `syntax-rules'.
+      ;; Just like `syntax-rules', we have (pattern template) pairs, however
+      ;; there can also be a guard form in between.
+      ((_ var form) (identifier? #'var) ;We match a form with two arguments,
+                                        ;i.e. (test foo bar), and additionally
+                                        ;we have the guard form that's just a
+                                        ;piece of code to be executed as a
+                                        ;predicate (and skip this pattern if it
+                                        ;fails).  The guard checks if the first
+                                        ;argument to our macro is a syntax
+                                        ;object of type "identifier", which
+                                        ;would correspond to a symbol in the
+                                        ;sexpr representation of code.
+       (begin ;We can execute arbitrary code here, but the return value must be
+              ;a syntax object.  They can be created via `datum->syntax', or
+              ;more commonly, `syntax'.  The reader syntax #'foo is short for
+              ;(syntax foo).  Also, referencing pattern variables, e.g. `var'
+              ;and `form' in this case, outside of a `syntax' form, is illegal,
+              ;it magically throws an error even if we just reference the
+              ;variable.
+         (display "Yo I'm in a macro and I'm displaying this string in the
+macro-expansion phase!\n")
+         #'(let ((var 'blah)) ;Knowing that `var' is an identifier, we used it
+                              ;as a variable-name in a `let' form, binding it to
+                              ;'blah.  Any identifier in the `syntax' form
+                              ;that's not a pattern variable (e.g. `let' here)
+                              ;is captured from the current lexical environment,
+                              ;so we're hygienic.
+             form))))))
+
+;;; Usage example:
+
+(test foo (begin (display (symbol->string foo)) (newline))) ;Outputs "blah".

@@ -1,0 +1,82 @@
+== JavaScript Objects ==
+
+An object has properties, keyed by strings.
+
+An object has an internal [[Prototype]] field, here represented by the
+pseudo-property .[prototype], in some implementations actually exposed
+under the property .__proto__, which determines the "type" of an
+object.
+
+Since the values in the [[Prototype]] fields of objects are actually
+objects too, they have a [[Prototype]] themselves, except some root
+prototype objects, for example the built-in "object prototype" object
+which is the root of all standard objects, here called [objproto].
+
+Property look-up happens by looking at an object's own properties
+first, then recursively through its [[Prototype]]'s properties, its
+[[Prototype]]'s [[Prototype]], etc.; this ends as we reach a root like
+[objproto].
+
+Other standard prototype objects are e.g. the function-prototype,
+array-prototype, and string-prototype objects, here called [fnproto],
+[arrproto], and [strproto] respectively; these all have [objproto] in
+their [[Prototype]] field though, not being root prototypes themselves
+(just one step away).
+
+A constructor is a function (i.e. has [fnproto] in its [[Prototype]])
+whose .prototype property holds the prototype for the type of which it
+creates instances; e.g. the global functions Object, Function, Array,
+and String have [objproto], [fnproto], [arrproto], and [strproto] in
+their .prototype fields.  It's noteworthy that Function has [fnproto]
+both in its [[Prototype]] and .prototype.  It's also noteworthy that
+Object creates objects closer to the root prototype object than the
+other constructors.
+
+The default constructors Object, Function, Array, String, etc. also
+serve as namespaces for some standard functions related to that "type"
+which however are not instance methods.  So for example there is
+Object.create; in contrast the .forEach method of arrays can be found
+in [arrproto] (which you can normally only reach as Array.prototype)
+so that it's found during property look-up.
+
+In short, built-in "types" are exposed only through their
+"constructors" which serve both as constructors, as a way to reach the
+prototype object for that type, and as a place to store non-method
+functions related to that type.
+
+By the way Object.create is a function taking one argument and
+returning an empty object with that argument in its [[Prototype]].
+'Object.create(null)' is the one way to create new "root" objects akin
+to [objproto].
+
+[objproto].[prototype] = _
+[fnproto].[prototype] = [objproto]
+[arrproto].[prototype] = [objproto]
+[strproto].[prototype] = [objproto]
+...
+
+Object.[prototype] = [fnproto]
+Function.[prototype] = [fnproto]
+Array.[prototype] = [fnproto]
+String.[prototype] = [fnproto]
+...
+
+Object.prototype = [objproto]
+Function.prototype = [fnproto]
+Array.prototype = [arrproto]
+String.prototype = [strproto]
+...
+
+
+     ,-----p-------[objproto]
+    /                  |
+   /         ,--------[p]---------------.
+  /         /               |            \
+  |        [p]             [p]           [p]
+  |         |               |             |
+  |     [fnproto]       [arrproto]    [strproto]
+  p       |   |             |             |
+  |      [p]  p             p             p
+  |       |   |             |             |
+  |-------|---|-------------|-------------|
+Object   Function         Array         String

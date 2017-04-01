@@ -1,0 +1,257 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <title>A Rundown of Lisp</title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <link rel="stylesheet" href="/style.css" type="text/css" />
+</head>
+<body>
+<div id="header">
+<h1 class="title">A Rundown of Lisp</h1>
+</div>
+<p>Lisp is a <em>family</em> of programming languages. The most popular are Common Lisp, Scheme, Emacs Lisp, and recently Clojure. This text might have a slight Scheme flavor.</p>
+<p>Lisps brought a lot of innovation, but nowadays mainly share one feature that sets them apart from other languages: their code is written in s-expressions.</p>
+<h2 id="symbolic-expressions">Symbolic Expressions</h2>
+<p>First you must learn about <em>symbolic expressions</em>, AKA <em>s-expressions</em>, AKA <em>sexprs</em>, AKA <em>sexps</em>. S-expressions are a recursively defined data format (like JSON, and a bit like XML):</p>
+<blockquote>
+<p>A sexpr is either 1. an atom, or 2. a pair of sexprs.</p>
+</blockquote>
+<ul>
+<li>An atom is a single datum like a number, string, etc.</li>
+<li>A pair is written <code>(x . y)</code>, where <code>x</code> and <code>y</code> are sexprs. (Recursion!)</li>
+</ul>
+<p>(Instead of the arrays and dictionaries in JSON, you have pairs.)</p>
+<p>(The parentheses and dot in the pair are just syntax, like the commas in arrays or colons in dictionaries in JSON. The dot <em>must</em> be separated with spaces though, unlike commas or colons in JSON.)</p>
+<p>In addition to usual atomic data types, sexprs support an atomic type called <em>symbol</em>. Symbols are restricted strings that don't need quotation. They are useful for things like tags, keywords, identifiers, etc. In some implementations they're case-insensitive.</p>
+<p>Examples of valid sexprs:</p>
+<pre><code>&quot;A string.&quot;
+a-symbol
+a.Really!@$Really%^&amp;Weird*=+Symbol&lt;&gt;/?
+2.5  ;a number (oh and comments start with a semicolon)
+(&quot;foo&quot; . 3)  ;a pair of two atoms
+((&quot;foo&quot; . bar) . 5)  ;nested pairs
+((-1 . 1) . (a . z))  ;likewise</code></pre>
+<p>Note that <code>'foo'</code> is not a string; only <code>&quot;foo&quot;</code> is. The apostrophe has a special meaning that we will learn later.</p>
+<p>We can represent many data structures with pairs that are aligned in such a way as to reflect the structure. The most common is the list, which is represented as a chain of pairs:</p>
+<pre><code>(first-element . (second-element . (third-element . NIL)))</code></pre>
+<p>Here we used the symbol <code>NIL</code> to mark the point at which the list ends. Some implementations use a special atomic value instead, which is called <em>the empty list</em> or <em>null</em> and is written <code>()</code>. This empty list object is also of a separate data type. No other object than the empty list is of that type.</p>
+<pre><code>(first-element . (second-element . (third-element . ())))</code></pre>
+<p>That's neat and makes sense because now we can say:</p>
+<blockquote>
+<p>A list is either the empty list, or a pair with the first element of the list in the left position, and the rest of the list in the right position.</p>
+</blockquote>
+<p>Writing lists with pairs is obviously ugly, so all implementations support a short version:</p>
+<pre><code>(first-element second-element third-element)</code></pre>
+<p>When read by a sexpr reader (parser), this is internally transformed to pairs, ending with the implementation's preferred list-ending object (<code>nil</code> or <code>()</code>).</p>
+<p>You'll also see mixed syntax; the following two are equivalent:</p>
+<pre><code>(foo bar baz . bat)
+(foo . (bar . (baz . bat)))</code></pre>
+<p>Note that that's not a proper list; in fact it's called an <em>improper list</em> because it's almost a list but doesn't end with the list-ending object but some other atomic object. It's valid data though, whereas the following is simply invalid syntax:</p>
+<pre><code>(foo . bar baz)</code></pre>
+<p>When transmitting data, lists would be used where in JSON you would use arrays. For dictionaries, you would use an <em>association list</em> AKA <em>alist</em>; these are simply a list of key-value pairs:</p>
+<pre><code>((key1 . value1)
+ (key2 . value2)
+ (key3 . value3))</code></pre>
+<p>Note that we used mixed syntax; the outer structure is a list that doesn't use the dotted pair notation, but the individual elements are simply pairs and not lists so they use the dotted pair syntax.</p>
+<p>The keys could be of any type (unlike in JSON where they must be strings) but most often they're symbols.</p>
+<p>That's all there is to sexprs! They're a simple data format that could be used in place of JSON.</p>
+<h2 id="evaluation">Evaluation</h2>
+<p>Lisp code is written in sexprs. When you pass a sexpr to a lisp <em>evaluator</em> (interpreter or compiler), it expects the sexpr to conform to certain rules, so that it makes sense as program code. The evaluation rules are as follows.</p>
+<hr />
+<p>Atoms other than symbols <em>evaluate to themselves</em>. So for example the sexpr number <code>5</code> evaluates to the number 5 in memory, the sexpr string <code>&quot;foo&quot;</code> evaluates to the string &quot;foo&quot; in memory, etc.. They just stand for themselves in the code. They're <em>literals</em>.</p>
+<p>Symbols are normally variable references, evaluating to the value of the variable.</p>
+<p>Plain pieces of data or plain variable references aren't very interesting of course; the real actions happen in lists. When a list is evaluated, the first element determines what happens:</p>
+<ul>
+<li>It could be the name of a function. In that case the list represents a function call, AKA <em>application</em>, and the rest of the list give the arguments to the function.</li>
+</ul>
+<p>So where in another language you might write</p>
+<pre><code>do_something(foo, bar)</code></pre>
+<p>in a Lisp you would write</p>
+<pre><code>(do-something foo bar)</code></pre>
+<ul>
+<li>It could also be the name of a <em>syntax keyword</em>. In that case the special rules of that syntax apply to the rest of the list, which could be anything. For example <code>if</code> is a syntax keyword.</li>
+</ul>
+<p>In another language the <code>if</code> syntax might look like:</p>
+<pre><code>if (foo) bar; else baz;</code></pre>
+<p>But in Lisp it would be represented as a list:</p>
+<pre><code>(if foo bar baz)</code></pre>
+<p>Or that other language might use <code>{ }</code> for code blocks:</p>
+<pre><code>if (foo) { bar; baz; } else { qux; fux; }</code></pre>
+<p>In Scheme you would use the <code>begin</code> syntax for that:</p>
+<pre><code>(if foo (begin bar baz) (begin qux fux))</code></pre>
+<p>(In Common Lisp and Emacs Lisp the <code>begin</code> syntax is called <code>progn</code> instead, for historical reasons.)</p>
+<p>But let's go back to function application first.</p>
+<p>Some implementations use separate namespaces for variables and functions. In those, the symbol which is the first element of a list must simply be the name of a function. In other implementations, the symbol is just a variable reference, and the variable must hold a function object, or <em>procedure</em> as called in Scheme.</p>
+<p>Lisps that have separate function and variable namespaces are called a <em>lisp-2</em>, because they have two namespaces. Others are called a <em>lisp-1</em>. (Actually both also have a syntax keyword namespace, but whatever.) Lisp-2s can have a function and a variable of the same name, so the code <code>(list list)</code> would call the <code>list</code> function on the value of the <code>list</code> variable. In a lisp-1 you would be calling the <code>list</code> procedure on itself, because both instances of <code>list</code> in that code are just variable references evaluating to the <code>list</code> procedure.</p>
+<hr />
+<p>What happens if the first element of a list is another list? Some implementations simply don't allow this. In those that do, the inner list is just evaluated normally but must result in a procedure object, and that procedure is then applied to the rest of the list as usual. For example:</p>
+<pre><code>((give-me-a-procedure foo) bar)</code></pre>
+<p>That first applies <code>give-me-a-procedure</code> to <code>foo</code>, which gives us a procedure; then that procedure is applied to <code>bar</code>.</p>
+<hr />
+<p>By the way, the order in which arguments in a function application are evaluated might be unspecified in a lisp implementation, so the code</p>
+<pre><code>(do-whatever (print-foo-and-return-whatever)
+             (print-bar-and-return-whatever))</code></pre>
+<p>might print bar before printing foo.</p>
+<hr />
+<p>That's all really. Now you know how to write data in sexprs, and you know how to write sexpr data which makes sense as lisp code. But you'll need to learn many important syntax keywords before you can actually write meaningful lisp code; the most important ones are explained in the examples below.</p>
+<h2 id="examples">Examples</h2>
+<pre><code>;; The rest of this file is all syntactically valid lisp code.
+;; The examples use a lisp similar to Scheme (a lisp-1).
+
+
+(add 5 (divide 6 2))  ; =&gt; 8
+
+;; The symbol &#39;add&#39; is not the name of a syntax keyword, so it
+;; gets evaluated as a variable reference (or looked up in the
+;; function namespace); this yields a procedure that does
+;; addition.  The other elements are also evaluated; 5 just
+;; evaluates to 5, and the list (divide 6 2) evaluates to 3.
+;; Finally the addition procedure is applied to 5 and 3, yielding
+;; 8.  (The comment with &quot;=&gt; 8&quot; is just to say that the whole
+;; thing evaluates to 8.)
+
+;; Actually &#39;+&#39; and &#39;/&#39; are also symbols, so they could be used
+;; too:
+(+ 5 (/ 6 2))  ; =&gt; 8
+
+
+(if (equal? a b)
+    (print &quot;a and b are equal&quot;)
+    (print &quot;a and b are not equal&quot;))
+
+;; The symbol &#39;if&#39; names a syntax keyword.  The rules of this
+;; syntax say: first evaluate the second element of the list (the
+;; one after the &#39;if&#39;), then if the resulting value is true, only
+;; evaluate the third sexpr, otherwise only evaluate the fourth
+;; sexpr.  Note that the question mark in &#39;equal?&#39; is just a part
+;; of that symbol.
+
+((if (= 5 5) double half) 10)  ; =&gt; 20
+((if (= 4 6) double half) 10)  ; =&gt; 5
+
+;; &#39;if&#39; not only executes the then-branch or else-branch as code;
+;; it also returns any value coming from the branch it evaluated.
+;; So we conditionally either apply the doubling procedure, or the
+;; halving procedure.  (Of course &#39;=&#39; is just the variable holding
+;; the numeric equality comparison procedure.)
+
+
+(define power-level (+ 9000 1))
+
+;; &#39;define&#39; is also syntax.  The rules say: the second element
+;; must be a symbol that names a new variable; the third element
+;; is evaluated and yields the initial value for that variable.
+
+
+(lambda (foo bar) body)
+
+;; The Greek letter &quot;lambda&quot; is used in maths to denote the
+;; creation of a so-called &quot;lambda abstraction&quot;, which is the
+;; mathematical model of lisp functions.  So &#39;lambda&#39; is used as a
+;; syntax keyword to create procedures.  The second element is the
+;; parameter list of the procedure.  The rest of the list is one
+;; or more sexprs that make up the procedure&#39;s body.  A procedure
+;; always returns the value of the last evaluation in its body.
+
+
+((lambda (x) (print &quot;adding 5 to my argument&quot;) (+ x 5))
+ 10)  ; =&gt; 15
+
+;; The first element is a list that evaluates to a procedure by
+;; using the lambda syntax.  The procedure is then applied to 10.
+
+
+(define double (lambda (x) (* x 2)))
+(print (double 5))
+
+;; Binds the variable &#39;double&#39; to a procedure, then uses it.
+
+
+(define (double x) (* x 2))
+(print (double 5))
+
+;; The define syntax is smart and understands this format as a
+;; shortcut for defining procedures, so it&#39;s the same as the
+;; previous example.
+
+
+(let ((x (calculate-x))
+      (y (calculate-y)))
+  (+ x y))
+
+;; The let syntax binds some variables and then evaluates its
+;; body.  The above is entirely equivalent to:
+
+((lambda (x y) (+ x y))
+ (calculate-x)
+ (calculate-y))
+
+
+;; That was a big chunk of the fundamentals of lisp.  In fact the
+;; last one is not fundamental because it&#39;s equivalent to using
+;; lambda (but looks nicer), and in lisp you can actually define
+;; new syntax keywords, so you could implement &#39;let&#39; yourself in a
+;; library!  All implementations provide it as a built-in though,
+;; because it&#39;s so useful.  It&#39;s the normal way in which you
+;; create *local* variables in lisp, where &#39;define&#39; is more used
+;; for global ones.</code></pre>
+<h2 id="quotation">Quotation</h2>
+<pre><code>;; Now let&#39;s see how we can use sexprs as actual data in a lisp
+;; program (which itself is already sexpr data).  This is a bit
+;; tricky at first, because we write down a single sexpr, but when
+;; a lisp evaluator goes over it, most of it turns into program
+;; logic while some parts of it remain pure data.
+
+
+(define foo (quote some-sexpr))
+
+;; Quote is a syntax keyword; this syntax expects exactly one
+;; other element in the list, and returns it as verbatim sexpr
+;; data, cancelling the lisp evaluator&#39;s effect on it.  In this
+;; case we bind &#39;foo&#39; to the symbol &#39;some-sexpr&#39;.
+
+;; We have shortcut syntax for quote:
+
+(define foo &#39;some-sexpr)  ;Any &#39;x automatically becomes (quote x).
+
+;; (There really is only one apostrophe on the left side.)
+
+
+(define list1 &#39;(some list))
+(define list2
+  (quasiquote (foo (unquote list1) bar (unquote (+ 3 2)))))
+
+;; Quasiquote is the same as quote, except that the sexpr is
+;; scanned for lists that start with &#39;unquote&#39;.  Those lists must
+;; have only one other element, for which evaluation is resumed
+;; again.  So now &#39;list2&#39; holds the sexpr &#39;(foo (some list) bar
+;; 5)&#39;.
+
+;; Note that &#39;unquote&#39; is not a syntax keyword; it&#39;s just scanned
+;; for by &#39;quasiquote&#39;.
+
+;; We also have shortcut syntax for quasiquote and unquote:
+
+(define list2 `(foo ,list1 bar ,(+ 3 2)))
+
+
+(define list1 &#39;(bar baz))
+(define list2 `(foo (unquote-splicing list1) quux))
+
+;; Quasiquote also scans for lists starting with
+;; &#39;unquote-splicing&#39;.  Those parts are also unquoted (evaluated),
+;; but they *must* evaluate to a list.  The elements of that list
+;; are &quot;spliced&quot; (inserted) into that position in the surrounding
+;; list.  So in the above example, &#39;list2&#39; gets bound to &#39;(foo bar
+;; baz quux)&#39;.
+
+;; Again, we have shortcut syntax for unquote-splicing:
+
+(define list2 `(foo ,@list1 quux))
+
+;; Fin.</code></pre>
+</body>
+</html>

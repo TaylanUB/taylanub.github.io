@@ -1,0 +1,44 @@
+== Guile and Elisp booleans and nil ==               -*- mode: org -*-
+
+- Object is
+  |      | false | null |
+  | #f   | x     |      |
+  | '()  |       | x    |
+  | #nil | x     | x    |
+  
+- Procedure checks for
+  |              | falsity | nullity |
+  | Scheme not   | x       |         |
+  | Scheme null? |         | x       |
+  | Elisp not    | x       | x       |
+  | Elisp null   | x       | x       |
+  
+- Scheme examples
+  (not #f)     => #t
+  (null? #f)   => #f
+  (not '())    => #f
+  (null? '())  => #t
+  (not #nil)   => #t
+  (null? #nil) => #t
+  
+- Elisp examples
+  (not scheme-f)     => t
+  (null scheme-f)    => t
+  (not scheme-null)  => t
+  (null scheme-null) => t
+  (not nil)          => t
+  (null nil)         => t
+
+- Meaning
+  There is a value that is true in Scheme, false in Elisp.
+  There is a value that is non-null in Scheme, null in Elisp.
+  
+- Implications
+  Scheme can give a true value that ends up being false in Elisp.
+  Scheme can give a non-null value that ends up being null in Elisp.
+  Elisp can give a false value that ends up being true in Scheme.
+  Elisp can give a null value that ends up being non-null in Scheme.
+  
+- Really a problem?
+  Find concrete examples where this causes unintuitive behavior of
+  code, and/or limits expressiveness, etc.

@@ -1,0 +1,52 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <title></title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <link rel="stylesheet" href="/style.css" type="text/css" />
+</head>
+<body>
+<h1 id="why-syntax-case">Why syntax-case</h1>
+<p>Exposing the s-expressions making up the code to the procedural macro system seems like a no-brainer, upon which higher abstractions would be built.</p>
+<p>I would contend though that it's a mistaken perspective. I don't expect to absolutely change the reader's mind, but let me try. I'll argue my position from both a theoretical and practical side. Starting with the theory.</p>
+<p>While Scheme code is made up of s-expressions at the lowest level, these sexprs gain additional meaning within the semantics of Scheme. As we know, every sexpr is evaluated in a given environment. For instance in R7RS, this environment is determined either by the series of imports at the start of a top-level R7RS program, the import declarations of a library definition, or the explicit environment object passed to the eval procedure. Thus, every sexpr that makes up Scheme code to be evaluated also has a context, an evaluation environment, attached to it. Therefore, a raw sexpr is not the correct reification of code when passed to or returned from a metaprogramming system such as procedural macros. Under syntax-case, the reified syntax objects correctly consist of a sexpr plus its context information. The ones passed to the macro system have the context already bundled, and the macro system can create further such syntax objects with appropriate context bundled to them via 'syntax', 'quasisyntax', and 'datum-&gt;syntax'. Raw sexprs can be extracted from syntax objects via 'syntax-&gt;datum'.</p>
+<p>Now, one could say that an equally valid reification is to pass the sexprs and context as separate objects. Semantically, I suppose this is equivalent. It is indeed what Syntactic Closures (SC), Reverse Syntactic Closures (RSC), and Explicit Renaming (ER) macro systems do in different ways, though they also all do something special/implicit when a raw sexpr is returned from a macro procedure:</p>
+<ul>
+<li><p>The SC system passes procedural macros a sexpr and an env object corresponding to the environment from which the macro is called (the caller environment). The programmer uses make-syntactic-closure to bundle the caller environment to an identifier; otherwise the identifier will be bundled with the environment in which the macro was defined (the definition environment) when it's returned from the macro procedure.</p></li>
+<li><p>The RSC system passes procedural macros a sexpr and the definition environment. The programmer uses make-syntactic-closure to bundle the definition environment to an identifier; otherwise the identifier will be bundled with the caller environment when it's returned from the macro procedure, though this is pretty much the same thing as what happens with 'define-macro', which is that the identifier is simply evaluated at the macro call site as if it appeared there normally. Therefore you could say RSC macros are &quot;unhygienic by default&quot;.</p></li>
+<li><p>The ER system passes procedural macros a &quot;rename&quot; procedure which bundles the definition environment to an identifier when the procedure is called on it. Other identifiers are implicitly bundled with the caller environment upon return. Essentially, ER is a thin wrapper around RSC.</p></li>
+</ul>
+<p>This might be subjective, but I would say these are somewhat lazy and/or clumsy abstractions. SC and RSC are pretty low-level; why burden the programmer with the task of manually bundling identifiers with environments? SC at least bundles the definition environment to bare identifiers implicitly on return, but that in turn limits some usages I will touch upon later.</p>
+<p>As for the IR system, it's the least bad: from the sexpr (tree) it passes to procedural macros, all the leaves are already bundled with the calling environment, and bare identifiers are bundled with the definition environment upon return. This is a fairly fine abstraction, but has the clumsiness of implicit bundling, which I will now explain.</p>
+<p>The problem with implicit bundling of the definition environment is, it doesn't let you compose syntax objects stemming from a variety of environments. I learned the usefulness of this through experience, making good use of syntax-case's capabilities in my Bytestructures library to offer an optional macro API to users who need maximum performance; via this, one can offload all offset calculation of structs to compile-time, essentially giving you something like C's type system for Scheme (it's indeed for FFI purposes, among more). This works thanks to the possibility of every bytestructure descriptor object (essentially a &quot;type&quot; object) being able to return its own partial syntax object --bundled to its own definition environment-- to a larger subsystem at compile time, that composes these syntax objects together to create the final piece of code that references bindings from all across the different modules in which different descriptors are defined.</p>
+<p>Note that while the bundling of a definition environment to an identifier is automatic under syntax-case, it's still explicit. You use 'syntax' or 'quasisyntax' to have a whole sexpr bundled to the environment in which it appears; you don't have to call a procedure on each identifier appearing in the leaves of that sexpr.</p>
+<p>The only annoyance with syntax-case is that bundling doesn't necessarily happen at the level of identifiers. When you bundle a whole expression like '(cons foo bar)' with an environment, you'll get a single syntax object containing that list of symbols as its payload, rather than a list of three syntax objects that are individually bundled with the given environment. The 'syntax-case' special form lets one destructure such syntax objects easily though, transparently working both with syntax objects containing lists, and lists containing syntax objects.</p>
+<p>External resources on SC, RSC, ER, and IR systems:</p>
+<ul>
+<li><a href="http://www.gnu.org/software/mit-scheme/documentation/mit-scheme-ref/Macros.html" class="uri">http://www.gnu.org/software/mit-scheme/documentation/mit-scheme-ref/Macros.html</a></li>
+<li><a href="https://wiki.call-cc.org/man/4/Macros" class="uri">https://wiki.call-cc.org/man/4/Macros</a></li>
+<li><a href="https://wiki.call-cc.org/explicit-renaming-macros" class="uri">https://wiki.call-cc.org/explicit-renaming-macros</a></li>
+</ul>
+<p>Bytestructures:</p>
+<ul>
+<li><a href="https://github.com/TaylanUB/scheme-bytestructures" class="uri">https://github.com/TaylanUB/scheme-bytestructures</a></li>
+</ul>
+<h2 id="a-concrete-example">A concrete example</h2>
+<p>Look into 'bytestructures/body/numeric.scm', and note how the 'uint8' descriptor ends up having (when the macros are expanded) a getter procedure like:</p>
+<pre><code>(define (getter syntax? bytevector offset)
+  (if syntax?
+      #`(bytevector-u8-ref #,bytevector #,offset)
+      (bytevector-u8-ref bytevector offset)))</code></pre>
+<p>Note the bit where 'bytevector-u8-ref' appears within a quasisyntax. This captures the identifier within this module, turning it into a syntax object; one that bundles the symbol 'bytevector-u8-ref' with the information that it's to be looked up in this module, where that identifier is bound (though imported from '(rnrs bytevectors)'). Effectively, it's an absolute reference to the 'bytevector-u8-ref' procedure from '(rnrs bytevectors)', in our beloved first-class functions fashion. Just this it's a compile-time reference to the procedure instead of a run-time reference.</p>
+<p>Meanwhile in another module, a procedural macro is defined in an environment where 'bytevector-u8-ref' isn't bound, only 'uint8'. When the macro is called, it calls the getter procedure of uint8 (with the syntax? flag set to true) as a helper, which returns the above seen snippet within quasisyntax, which contains the reference to the 'bytevector-u8-ref' procedure. When the macro returns this snippet (or it could mix it into a larger syntax object as a subform), that reference still functions; the macro ends up emitting code that references 'bytevector-u8-ref' even though that was never bound in the environment the macro was defined in.</p>
+<p>Under IR, the procedural macro could have only emitted references to bindings that are in the same module the procedural macro was defined (its definition environment). More precisely, every symbol the macro returns would have been automatically bound to the environment in which the macro was defined, with no chance of us telling the system to look up some of them in another module.</p>
+<p>Only in the syntax-case system, thanks to the fact that syntax objects can be created and juggled around arbitrarily, we are able to call a helper procedure from another module that gives us a piece of code containing references to bindings in <em>that</em> module and not ours. Thus we get composable, modular procedural macros.</p>
+<h2 id="actually-in-sc-and-rsc...">Actually, in SC and RSC...</h2>
+<p>I noticed this after writing the first part of this post.</p>
+<p>The low-level MIT/GNU Scheme macro system that offers SC and RSC macros actually has a capability that makes it equally powerful as syntax-case: the 'capture-syntactic-environment' operator. With this, we can essentially imitate 'quasisyntax'; just call that operator to get the current module environment, then use 'make-syntactic-closure' to bundle a symbol with it, and you have the equivalent of a syntax object.</p>
+<p>I see no sense in burdening programmers with such low level facilities however, and prefer the relative simplicity of syntax-case.</p>
+</body>
+</html>

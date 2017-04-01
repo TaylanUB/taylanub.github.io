@@ -1,0 +1,116 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <title>Novel value passing semantics for Scheme</title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <link rel="stylesheet" href="/style.css" type="text/css" />
+</head>
+<body>
+<div id="header">
+<h1 class="title">Novel value passing semantics for Scheme</h1>
+</div>
+<p>Note: Remember the equivalence between procedure calls, and value returns to continuations, while reading this document. Returning values means calling the current continuation with those values as arguments. Consider the following implementation of <code>values</code>:</p>
+<pre><code>(define (values . vals)
+  (call/cc (lambda (cont) (apply cont vals))))</code></pre>
+<p>It literally applies the current continuation to a list of values!</p>
+<p>Thus, &quot;value&quot; and &quot;argument&quot; are pretty much synonyms, although both are used in this document because sometimes one is clearer.</p>
+<h2 id="zero-value-returns">Zero value returns</h2>
+<p>Scheme often says that an expression returns an unspecified value when it doesn't make sense for it to return a value. This applies, for example, to procedures called only for side-effect.</p>
+<p>It would be cleaner to specify such expressions to return zero values.</p>
+<p>Scheme also specifies that the continuation of a non-tail expression in a <code>&lt;body&gt;</code> takes an arbitrary number of values and discards them.</p>
+<p>It would be cleaner to specify such continuations to take zero values.</p>
+<hr />
+<p>This would prevent a class of programmer errors where a procedure's return value is ignored accidentally. For instance Guile's <code>system*</code> procedure returns an integer to report the exit status of the process that was executed; it's easy to forget that no exception will be raised, and a possible failure of the executed process has to be tested as per this integer return value instead.</p>
+<p>This means that code such as</p>
+<pre><code>(begin
+  (copy-file x y)
+  (do-something))</code></pre>
+<p>cannot possibly &quot;leak&quot; any values returned by <code>copy-file</code>; an error will be raised if <code>copy-file</code> returns more than zero values.</p>
+<p>When returned values are desired to be discarded, an <code>ignore</code> special form could be used, which accepts one operand that is an arbitrary expression, ignores all values resulting from the evaluation of that expression, and returns zero values.</p>
+<pre><code>(begin
+  (ignore (system* &quot;false&quot;))  ;ignore exit status
+  (do-something))</code></pre>
+<hr />
+<p>Another problem it would prevent is where programmers accidentally rely on a procedure, whose return value is unspecified, to return a non-false value.</p>
+<p>This happened in many GNU Guix package recipes, where every build phase procedure is expected to return a Boolean value, but many programmers wrote procedures that end in a call to a procedure with an unspecified return value (typically, one called for side effects), which works only because GNU Guile consistently returns a special <code>*unspecified*</code> value which is non-false, although its own user manual generally says that procedures return an unspecified value, and not the special <code>*unspecified*</code> value.</p>
+<p>Now either Guile will have to constrain itself to return this value consistently where a return value was really meant to be unspecified, or many Guix recipes will break. If such procedures returned zero values instead, then said build phase procedures would fail because they don't return the expected Boolean, and the programmers would write them properly to begin with.</p>
+<p>(This would, however, not solve the problem where the numeric return value of <code>system*</code> is interpreted as true, and therefore successful, when it really was an integer indicating failure. This brings us to the question of whether it wouldn't be better to raise a type mismatch error in cases where a non-Boolean value is used as a Boolean, but that is another topic.)</p>
+<hr />
+<p>This safety net has some small necessary overhead on every procedure call in a non-tail position in a body (of a begin, lambda, etc.). An implementation could provide an optimization to remove the safety net.</p>
+<h2 id="passing-optional-values">Passing optional values</h2>
+<p>A well-known extension to procedure call semantics is to allow procedures to specify optional parameters. Thus the call-site does not need to provide all possible arguments to the procedure; they take default values when unspecified.</p>
+<p>What's missing is support for the call-site to provide values that are optional to handle by the called procedure.</p>
+<hr />
+<p>This would allow, for instance, writing an interface that takes user-defined procedures and calls them with a number of values they must handle and a number of values which might be but are not necessarily useful, and users of this interface could pass any procedure that handles at least the mandatory values.</p>
+<p>The programmer would otherwise need to wrap some procedures to ignore some of their arguments and pass on the others, or write procedures with ignored parameters that aren't referenced in the procedure body.</p>
+<hr />
+<p>Perhaps a better example is not when calling a procedure, but when returning values. Some &quot;search&quot; or &quot;lookup&quot; procedure (for a hash table, database, etc.) returns one mandatory-to-handle value, which is the search result or a &quot;not found&quot; token; and also returns an optional Boolean which explicitly says whether a result was or was not found. This way users of the procedure can distinguish between the case where no result was found, and the case where the &quot;not found&quot; token just happened to be the actual result of the search. But they can also ignore the extra Boolean and conflate those cases if they want.</p>
+<p>Currently most systems fulfill this use-case by making superfluous return values always be ignored, or by providing an alternative procedure, which raises an exception, calls a given procedure, or does something else in the case where no result was found.</p>
+<hr />
+<p>Specifying optional arguments in a procedure call might work with a special token marking the beginning of the optional values, such as:</p>
+<pre><code>(procedure foo bar #!optional alpha beta)</code></pre>
+<p>This token does not evaluate; it is only valid as part of a procedure-call expression and special-handled by <code>eval</code>.</p>
+<hr />
+<p>Optional values could be returned by, well, calling the current continuation with optional values:</p>
+<pre><code>(call/cc (lambda (k) (k foo bar !optional alpha beta)))</code></pre>
+<p>but that's not very nice. The <code>values</code> procedure, which is already used to call the current continuation with multiple values, could be used for this purpose:</p>
+<pre><code>(values foo bar #!optional alpha beta)</code></pre>
+<p>Being implemented as a primitive, it would intercept the optional status of its arguments and return them again as such.</p>
+<hr />
+<p>When a procedure with optional parameters is called also with optional values, the behavior would be as follows:</p>
+<p>The mandatory and optional parameters of the procedure are conceptually appended to create a full parameter list. The mandatory and optional values passed to the procedure are appended as well, creating a full value list. Each value in the value list fills the corresponding slot in the parameter list until either list is exhausted. It is an error if there remain unfilled mandatory parameter slots, or unused mandatory values.</p>
+<hr />
+<p>When a procedure takes a rest-arguments list, the optional status of values is discarded.</p>
+<h2 id="optional-keyword-arguments">Optional keyword arguments</h2>
+<p>The concept of passing optional values can be extended to include keyword arguments (or &quot;keyword values&quot;), which are another well-known extension to procedure call semantics.</p>
+<p>In GNU Guix recipes, it is extremely common to see a formal parameters specification such as <code>(#:key inputs outputs #:allow-other-keys)</code>, meaning the keyword arguments <code>inputs</code> and <code>outputs</code> are bound to these identifiers, and any other keyword arguments are ignored. This <code>#:allow-other-keys</code> token would be unnecessary if the call-site could specify that most or all keyword arguments are optional to handle.</p>
+<p>The <code>#!optional</code> token could be re-used for this:</p>
+<pre><code>(procedure foo bar #!optional alpha beta
+           #:keyword-x value-x #:keyword-y value-y
+           #!optional
+           #:keyword-a value-a #:keyword-b value-b)</code></pre>
+<hr />
+<p>The <code>values</code> procedure would again be used to call the current continuation with given values:</p>
+<pre><code>(values foo bar #!optional alpha beta
+        #:keyword-x value-x #:keyword-y value-y
+        #!optional
+        #:keyword-a value-a #:keyword-b value-b)</code></pre>
+<h2 id="keyword-arguments-and-rest-arguments">Keyword arguments and rest arguments</h2>
+<p>Improper formal parameter lists don't combine well with keyword arguments. Keeping with s-expression structure, one would have to put the dotted tail of the list after all keyword parameters, and it would not be obvious what it denotes. I would propose to support improper parameter lists for backwards compatibility only, and offer a <code>#!rest</code> token for new code, which would also work in combination with the <code>#!keyword</code> token:</p>
+<pre><code>(lambda (x y #!optional a b #!rest rest
+         #!keyword alpha beta #!rest keyword-rest)
+  ...)</code></pre>
+<p>Using an old-style rest argument like:</p>
+<pre><code>(lambda (x y . rest) ...)</code></pre>
+<p>would be equivalent to:</p>
+<pre><code>(lambda (x y #!rest rest) ...)</code></pre>
+<p>meaning it errors when mandatory keyword values are received, but ignores optional keyword values.</p>
+<hr />
+<p>Sometimes one wants to wrap a procedure in another, remaining agnostic to what arguments it accepts. In that case one normally uses not a formal parameter list, but a single identifier. We don't want to break compatibility too much so that would keep functioning as a rest arguments list, and a new syntax would be allowed to intercept received values as an object of a new &quot;values&quot; type:</p>
+<pre><code>((lambda (#!values values) values)
+ foo bar #!optional alpha beta
+ #:keyword-x value-x #:keyword-y value-y)
+
+     =&gt; #&lt;values mandatory: (foo bar)
+                 optional: (alpha beta)
+                 keyword-mandatory:
+                 ((keyword-x . value-x) (keyword-y . value-y))
+                 keyword-optional:
+                 ((keyword-a . value-a) (keyword-b . value-b))&gt;</code></pre>
+<p>This type would be accepted by <code>apply</code> as an alternative to lists. There could also be a full API for this new type, to create instances of it, access their components, etc.</p>
+<p>Any other use of the #!values token would be an error. I.e. it cannot be mixed in any way with any other formal parameter list; it must always occur as the first element of a two-element formal parameter list, the second element being the variable to which the values object will be bound.</p>
+<h2 id="automatic-handling-of-wrong-number-of-values">Automatic handling of wrong number of values</h2>
+<p>A common complaint about multiple-value returns is that they don't compose well with the rest of Scheme because they are not first-class.</p>
+<p>A possible solution is to automatically wrap wrong numbers of values in values objects.</p>
+<p>This way, code such as <code>(foo (bar))</code> and <code>(apply foo (bar))</code> works no matter how many values are returned (hence first-class); the former might just eventually raise a type error if it didn't expect to get a values object.</p>
+<p>However, this has some serious problems.</p>
+<p>Firstly, this generally delays error reporting (leading to an object of a wrong type, a values object, being passed to some place instead of immediately erroring). Worse, it hinders error reporting much more severely in some cases, notably conditionals: a values object of zero values or several false values will presumably be true unless the implementation complicates its conditionals to special-handle these, and even then their semantics are not obvious.</p>
+<p>So it's probably least problematic to generally error on values mismatch, and only allocate values objects when a formal parameter specification is a single identifier. We accept the problem of second class status of multiple values, and live with it.</p>
+<h2 id="reference-implementation-in-gnu-guile">Reference implementation in GNU Guile</h2>
+<p>A &quot;reference implementation&quot; of all above ideas should be under the same directory as this file, under the name scheme-values.scm (or with an additional .txt at the end to satisfy certain systems). This implements a trivial meta-circular evaluator; it doesn't add the described semantics to Guile itself.</p>
+<p>Fin.</p>
+</body>
+</html>

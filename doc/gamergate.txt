@@ -1,0 +1,105 @@
+source
+======
+
+https://archive.today/Ler4O
+
+
+method
+======
+
+# Unix Bourne shell script:
+
+wget https://archive.today/Ler4O -O irclog
+
+sed -n "s/.*&#62;\\t\\(.*\\)/\1/p" < irclog > irclog-filtered
+
+for re in zoe anita 'wom[ae]n' 'feminis[tm]' 'josh|boggs' kotaku nathan
+do
+    printf "$re: "
+    grep -Eic "$re" irclog-filtered
+done
+
+# end script
+
+
+explanation of method
+=====================
+
+We fetch the IRC log that's in some HTML page.
+
+All lines that are a user talking look like "DATE <NICK> MESSAGE"
+where there is a tab between <NICK> and MESSAGE.  The < and >
+surrounding NICK are encoded as &#60; and &#62; in the HTML.
+
+We go through the file with sed, finding lines matching the regexp
+'.*&#62;\t' (any text, followed by the sequence "&#62;", and a tab
+character), remove exactly that portion of the line, printing out the
+rest.  Thus we get a file consisting purely of the users' messages in
+the channel.
+
+We run a series of case-insensitive regexps on the file, printing out
+the number of matching lines (not the number of matches) for each
+regexp.
+
+
+result
+======
+
+zoe:         4322
+
+wom[ae]n:    1315
+anita:       1213
+feminis[tm]:  990
+
+kotaku:       757
+josh|boggs:   318
+nathan:        96
+
+wom[ae]n + anita + feminis[tm]: 3518
+josh|boggs + kotaku + nathan:   1171
+
+
+interpretation
+==============
+
+(Zoe's actions have actually been disproven to be related to gaming
+journalism corruption, hence she could be considered part of the top
+group as well; I'm being generous by excluding her and putting her in
+her own group.)
+
+Attention on Zoe blows everything else out of proportion.  Despite her
+actions largely being problems between her and people she made
+relationships with, the channel is primarily concerned with her, with
+the pretense of this having anything to do with corruption in gaming
+journalism, despite that having been proven wrong.  Leaving aside that
+a person's private life is not the business of the public or the
+Internet, It's not like the channel is even claiming to be punishing
+her for the alleged horrible things she did to her ex-partner; they
+simply love being aggressive against her.  Assuming the horrible
+things her ex-partner wrote are true, one needs to ask whether the
+right course of action is to harass her whole friend circle, or to
+suggest her therapy; again leaving aside the fact that a decent person
+does not meddle with the private life of a stranger.
+
+Talk about gaming journalism corruption (josh, kotaku, nathan), is
+shadowed by talk about (anti-)feminism/misogyny (women, anita,
+feminism).  I hope I don't need to present proof that it's mostly
+about misogyny and anti-feminism and not positive talk about feminism.
+(By the way Anita is Anita Sarkeesian.)
+
+Talk about Kotaku, Joshua Boggs, and Nathan, who could be considered
+the gaming journalism corruption figures here, are the smallest focus
+in comparison to the other topics.
+
+Nathan is also notorious for being one of those Zoe allegedly cheated
+on her partner with, and the original article by Zoe's ex-partner did
+not show him in a particularly good light, yet no attention is given
+to him in the channel.  Just in case someone claims the channel to be
+concerned with infidelity!
+
+
+conclusion
+==========
+
+The "GamerGate" phenomenon is primarily rooted in misogyny, not
+concerns over ethics in video game journalism.

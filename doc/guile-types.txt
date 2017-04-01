@@ -1,0 +1,53 @@
+== Guile Types ==                                    -*- mode: org -*-
+
+(See libguile/tags.h in Guile source tree.)
+
+Objects fit into 32 bits on the stack (actually 31), and can either be
+"immediate" Scheme objects whose type and content is described right
+in those 32 bits, or they can be pointers to a heap value describing
+the type and contents of the object.
+
+Stack values:
+.......1  not a Scheme object; 31 or 63 bits of arbitrary data
+......10  immediate Scheme object that's an integer of 30 or 62 bits
+.....100  immediate Scheme object that's not an integer; see below
+.....000  8-byte aligned pointer into the Scheme heap
+
+(Note: immediate integer objects are also called fixnums.)
+
+In the '100' case, another 5 bits disambiguate the type:
+00000-100  a specific object identified by a unique 24-bit pattern
+00001-100  a character, encoded in 24 bits
+...1.-100  unused
+
+True, false, nil, null, end-of-file, *unspecified*, etc. are all
+specific objects identified by a unique 24-bit pattern.
+
+The 24 bits for a character are simply an unsigned integer whose
+numeric value is a Unicode code point.
+
+Heap cells are 64 bits.
+
+Heap values:
+.......0  a pair; two Scheme objects (immediate or heap pointer)
+.....001  a struct
+.....011  a closure
+.....1.1  other; see table in tags.h
+
+Note how all Scheme objects end in a 0 bit, regardless of whether
+they're immediate objects or pointers into the heap.  This enables a
+representation of pairs that is simply two side-by-side Scheme objects
+in a 64-bit heap cell.  And heap values ending in a 1 thus describe
+objects of any other type and contents.
+
+(It's also noteworthy how in the representation of pairs, one bit
+remains unused, theoretically, in the second word of the heap cell.
+Using that (making it non-0) would probably be impractical, because it
+would inhibit us from simply extracting the second word of a pair and
+using it as a Scheme object, say putting it onto the stack; we would
+need to always strip that bit in that case.)
+
+Among the other types represented with the ".....1.1" sequence, there
+are numbers, ports, and SMOBs.  Each of those are further subdivided
+via another 8 bits, meaning there can be 256 number types (in addition
+to fixnums), 256 port types, and 256 SMOB types.

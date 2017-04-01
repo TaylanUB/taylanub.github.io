@@ -1,0 +1,177 @@
+From: Drew Crawford <drew@sealedabstract.com>
+Subject: Re: On "Why mobile web apps are slow"
+To: Taylan Ulrich B. <taylanbayirli@gmail.com>
+Date: Sun, 8 Sep 2013 07:48:19 -0500 (10 hours, 9 minutes, 29 seconds ago)
+
+Hi Taylan,
+
+So a couple of things. First of all, GenMS is the best-performing
+garbage collector in the paper. So if you interpret my statement as
+being a general conclusion drawn from the seven different garbage
+collectors on the chart, (instead of as a lower bound for any
+conceivable garbage collector), then I think you understand my
+original intention better.
+
+So with regard to GenMS specifically, I think some good questions at
+this point would be
+
+1 Could a JS engine be constructed with a GenMS-style collector? If
+  so, why has this not already been done?
+
+2 Would the speed difference in GenMS be of such sufficient advantage
+  that people would notice, or would be able to use JS for new
+  purposes that they were not able to before?
+
+I am uncertain as to the first question, but I believe the answer to
+the second question is "no".
+
+    A web application
+    can make significant use of CSS for hardware-accelerated
+    animations,
+    use the canvas 
+
+This assumes, of course, first of all that mobile UI behavior is
+fairly stable, and second of all that one can achieve broad consensus
+on the question such that anyone's reasonable desires be standardized
+in CSS across major browsers. I think on both counts, this idea is
+totally unsupportable at present.
+
+I mean just for starters, iOS 7 has demonstrated that questions like
+"how does a button work" are fundamentally wide open questions. And in
+fact as recently as 60 days ago, the behavior on the platform has
+changed again.
+
+It could be that in some far future we could finally achieve consensus
+such that CSS can standardize, say, buttons. But it does not seem like
+a certainty to me, and at any rate we are not there now.
+
+    and web sockets to deliver results of server-side
+    computation, etc., so performance problems in JavaScript itself
+    are
+    not enough to make a claim on web applications in general. 
+
+I fundamentally believe that not even HTTP-over-TCP (e.g. what many
+native applications do) is fast enough for many purposes given the
+latency on modern cellular connections. To that effect, I have
+developed things to replace them that I use. But at any rate, no, I do
+not believe WebSockets are good enough for everyone. Not even the
+technologies underlying them are good enough, in my view. It takes 1.3
+seconds to open an SSL connection in a well-covered city. That's too
+long.
+
+    By
+    the way, if you visit http://forecast.io/ you can see a perfect
+    example of a web application that to me seemed indistinguishable
+    from
+    a native application when I had a coworker show it to me on their
+    iPhone 5. 
+
+I hope you read their blog post about how they achieved this
+performance. There are a number of things they tried, and failed, to
+do.
+
+I think the reality is that you can do just about anything if you have
+smart engineers. You can probably write a fast mobile app in FORTRAN
+with the right engineers. The better question is--is it a good idea?
+Is it making good use of resources?
+
+    On this
+    concrete evidence alone, I'm afraid I consider the base point of
+    your
+    article (that "web apps" are inherently slow) disproven,
+
+The fact that you believe a single example can "disprove" my claim is
+evidence that you have misunderstood my claim. You can write a fast
+mobile app in FORTRAN. Is it a good idea? Does it make you more or
+less likely to succeed? These are fundamentally not questions that can
+be answered from any single example. They can be answered from looking
+at examples in the aggregate, perhaps. But at any rate, the proof
+method presented is fundamentally incapable of meeting its burden.
+
+    I wonder, whichever implementations were used,
+    whether these are at all comparable to a modern production-grade
+    GC as
+    for example that of Sun's JVM.
+
+"Wondering" is good! Even better is producing a relevant paper.
+
+    I wouldn't be surprised to see a GC-ed
+    language that can outperform Objective-C in memory management
+    performance. (Perhaps a well-optimizing Scheme implementation.
+    Scheme is perhaps one of the most optimize-able dynamic and GC-ed
+    languages.)
+
+Hypothesizing is good! Even better is presenting a relevant paper.
+
+    The following is noteworthy: "[Zorn] finds that
+    the Boehm-Demers-Weiser collector is occasionally faster than
+    explicit
+    memory allocation, but that the memory consumed by the BDW
+    collector
+    is almost always higher than that consumed by explicit memory
+    managers, ranging from 21% less to 228% more." 
+
+I have no knowledge of BDW specifically, but based on my knowledge of
+other Boehm-derived collectors, I understand this statement to mean
+that this collector requires -21%-228% heap size minimum (e.g. to
+run), not merely -21%-228% to run with identical performance. There
+are many very new collectors that have the property that they beat
+most of the algorithms in this paper, with the caveat that if you go
+below about 2-3x they refuse to run at all. For the problem domain we
+are interested in, I do not believe this is a meaningful improvement.
+
+    And a point on the language of ECMA 6 as quoted by you: perhaps
+    you're
+    unfamiliar with standards bodies but it's rather common for a
+    standard
+    to have definitions that seem "tautological" and needless. 
+
+I continue to mock the language, for the reasons stated in my article,
+and for many more reasons that were not relevant to the thesis but may
+be relevant here.
+
+For one thing, the definition of the garbage collector given is
+nonconstructive. If the purpose of this specification is to tell
+people how to build a JS engine, then it has failed. There are, of
+course, actual garbage collectors in existence, and so it would be
+easy to instead refer to an actual garbage collector and say "use this
+one, or one at least this good in [dimensions]." But it does not, and
+so it is not immediately clear how we would go about it. This is a
+clear deviation from your Scheme example, because it is obvious to
+everyone how to implement a Scheme interpreter that allows evaluations
+to run forever. It is not obvious to anyone how to write a garbage
+collector that meets JS's requirements or that would be a good fit for
+the language.
+
+Second of all, the definition it proposes is actually unsatisfiable,
+and actually both clauses are independently unsatisfiable. JS being a
+Turing-complete language, it is of course not possible to decide the
+positive case of whether some items can be collected. And so of course
+by reduction to the halting problem, the SHOULD constraint is
+fundamentally unsatisfiable. Assuming "should" takes on some meaning
+like the one given in RFC2119, it is impossible for anyone to apply
+the world SHOULD correctly. That RFC suggests "there may exist valid
+reasons" for deviating from the suggestion, "but the full implications
+must be understood and carefully weighed" before deviating. If the
+authors of the ECMA6 spec understood the "full implications" of the
+halting problem, they would not write a spec that everyone who's ever
+head of Alan Turing would be required to ignore. If we assume they are
+not stupid, then we must contemplate what possible reason they would
+have for suggesting an unsatisfiable constraint. And if we cannot
+think of a reason, then we have not considered "the full implications"
+of their suggestion, which would preclude us from ignoring it. Any
+angle you study this from it comes out poorly for anyone conforming to
+the specification.
+
+Third of all, of course the MUST constraint is unsatisfiable in a
+memory-constrained environment. As you point out, Scheme has this
+problem as well, but as I understand it people do not seriously
+present Scheme as the optimal language for everybody's mobile app
+development. And so long as it is the case that people run Scheme
+programs on machines that have a lot more memory than are strictly
+required for their problems, this is not necessarily a bug. (It is not
+really a bug in JavaScript either; rather, it is a bug in the people
+who try to use JavaScript in a low-memory environment when this is
+contrary to the language design.)
+
+Drew
